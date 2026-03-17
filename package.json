@@ -1,0 +1,41 @@
+{
+  "name": "payload-multitenant-agency-portal-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test",
+    "seed": "node --env-file=.env --import tsx scripts/seed.ts",
+    "bootstrap": "npm run generate:types && npm run generate:importmap && npm run seed",
+    "generate:types": "payload generate:types",
+    "generate:importmap": "payload generate:importmap"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
+    "@mui/material-nextjs": "^7.3.9",
+    "@payloadcms/db-sqlite": "3.79.1",
+    "@payloadcms/next": "3.79.1",
+    "graphql": "^16.13.1",
+    "next": "^15.4.11",
+    "payload": "3.79.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sharp": "0.34.5",
+    "tsx": "4.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.5.2",
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  }
+}
