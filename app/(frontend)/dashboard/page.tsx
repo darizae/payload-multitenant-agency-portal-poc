@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { Button, Card, CardContent, Grid, Stack, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
 import { getDashboardStats, getVisibleCustomers } from '@/lib/services/portal'
-import { canAccessPayloadAdmin } from '@/lib/permissions'
 
 export default async function DashboardPage() {
   const user = await requireUser()
@@ -13,13 +12,9 @@ export default async function DashboardPage() {
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
         <div>
           <Typography variant="h4">Dashboard</Typography>
-          <Typography color="text.secondary">
-            This MUI portal demonstrates the same tenant model as the Payload backend and admin panel.
-          </Typography>
         </div>
         <Stack direction="row" spacing={1}>
           <Button component={Link} href="/dashboard/agencies" variant="contained">Browse agencies</Button>
-          {canAccessPayloadAdmin(user) ? <Button component={Link} href="/admin" variant="outlined">Open Payload Admin</Button> : null}
         </Stack>
       </Stack>
 

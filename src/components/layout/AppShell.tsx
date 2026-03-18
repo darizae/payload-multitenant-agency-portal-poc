@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { AppBar, Box, Button, Chip, Container, Stack, Toolbar, Typography } from '@mui/material'
 import type { AppUserLike } from '@/lib/types'
 import { LogoutButton } from '@/components/layout/LogoutButton'
-import { canAccessPayloadAdmin } from '@/lib/permissions'
 
 export function AppShell({ user, children }: { user: AppUserLike; children: ReactNode }) {
   return (
@@ -16,9 +15,6 @@ export function AppShell({ user, children }: { user: AppUserLike; children: Reac
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <Button component={Link} href="/dashboard">Dashboard</Button>
             <Button component={Link} href="/dashboard/agencies">Agencies</Button>
-            {canAccessPayloadAdmin(user) ? (
-              <Button component={Link} href="/admin" variant="outlined">Payload Admin</Button>
-            ) : null}
             <Chip label={`${user.name || user.email} · ${user.role}`} color="primary" variant="outlined" />
             <LogoutButton />
           </Stack>
