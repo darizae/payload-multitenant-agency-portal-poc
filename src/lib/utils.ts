@@ -1,12 +1,25 @@
 import crypto from 'node:crypto'
 import type { ID } from '@/lib/types'
 
+function normalizePrimitiveId(value: string | number): ID | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed)
+  }
+  return trimmed
+}
+
 export function getId(value: unknown): ID | null {
-  if (!value) return null
-  if (typeof value === 'string' || typeof value === 'number') return value
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' || typeof value === 'number') return normalizePrimitiveId(value)
   if (typeof value === 'object' && value !== null && 'id' in value) {
     const possibleId = (value as { id?: ID }).id
-    return typeof possibleId === 'string' || typeof possibleId === 'number' ? possibleId : null
+    return typeof possibleId === 'string' || typeof possibleId === 'number' ? normalizePrimitiveId(possibleId) : null
   }
   return null
 }

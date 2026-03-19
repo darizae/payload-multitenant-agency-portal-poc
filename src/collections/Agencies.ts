@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { APIError } from 'payload'
 import { agenciesReadAccess, canAccessAdminPanel } from '@/lib/access'
 import { isPlatformAdmin, isAgencyAdmin } from '@/lib/permissions'
 import { getId } from '@/lib/utils'
@@ -23,6 +24,20 @@ export const Agencies: CollectionConfig = {
     delete: ({ req }) => isPlatformAdmin(req.user as any),
   },
   hooks: {
+    beforeDelete: [
+      async ({ req, id }) => {
+        const [users, customers, assignments, invites] = await Promise.all([
+          req.payload.count({ collection: 'users', overrideAccess: true, where: { agency: { equals: id } } }),
+          req.payload.count({ collection: 'customers', overrideAccess: true, where: { agency: { equals: id } } }),
+          req.payload.count({ collection: 'agency-customer-assignments', overrideAccess: true, where: { agency: { equals: id } } }),
+          req.payload.count({ collection: 'invite-tokens', overrideAccess: true, where: { agency: { equals: id } } }),
+        ])
+
+        if (users.totalDocs > 0 || customers.totalDocs > 0 || assignments.totalDocs > 0 || invites.totalDocs > 0) {
+          throw new APIError('Remove agency users, customers, assignments, and invite tokens before deleting an agency.', 400)
+        }
+      },
+    ],
     afterChange: [
       async ({ doc, operation, req, previousDoc }) => {
         await writeAuditLog({
@@ -49,7 +64,7 @@ export const Agencies: CollectionConfig = {
           action: 'agency.delete',
           entityType: 'agency',
           entityId: doc.id,
-          agency: doc.id,
+          agency: null,
           summary: `Deleted agency ${doc.name}`,
         })
       },

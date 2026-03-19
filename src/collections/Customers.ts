@@ -67,15 +67,12 @@ export const Customers: CollectionConfig = {
           collection: 'agency-customer-assignments',
           overrideAccess: true,
           where: {
-            and: [
-              { customer: { equals: id } },
-              { status: { equals: 'active' } },
-            ],
+            customer: { equals: id },
           },
         })
 
         if (assignments.totalDocs > 0) {
-          throw new APIError('Remove active agency assignments before deleting a customer.', 400)
+          throw new APIError('Remove agency assignments before deleting a customer.', 400)
         }
       },
     ],
@@ -107,7 +104,7 @@ export const Customers: CollectionConfig = {
           entityType: 'customer',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: doc.id,
+          customer: null,
           summary: `Deleted customer ${doc.name}`,
         })
       },

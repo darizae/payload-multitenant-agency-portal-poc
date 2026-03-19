@@ -120,6 +120,37 @@ export const Users: CollectionConfig = {
             throw new APIError('You cannot delete the last active customer admin.', 400)
           }
         }
+
+        const assignmentCount = await req.payload.count({
+          collection: 'agency-customer-assignments',
+          overrideAccess: true,
+          where: {
+            agencyUser: { equals: id },
+          },
+        })
+        if (assignmentCount.totalDocs > 0) {
+          throw new APIError('Remove assignments linked to this user before deleting them.', 400)
+        }
+
+        while (true) {
+          const invites = await req.payload.find({
+            collection: 'invite-tokens',
+            overrideAccess: true,
+            depth: 0,
+            limit: 100,
+            where: {
+              user: { equals: id },
+            },
+          })
+          if (invites.totalDocs === 0) break
+          for (const invite of invites.docs) {
+            await req.payload.delete({
+              collection: 'invite-tokens',
+              id: invite.id,
+              overrideAccess: true,
+            })
+          }
+        }
       },
     ],
     beforeLogin: [

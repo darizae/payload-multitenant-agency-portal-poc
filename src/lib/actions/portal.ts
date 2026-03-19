@@ -13,7 +13,7 @@ function text(formData: FormData, key: string): string {
   return String(formData.get(key) || '').trim()
 }
 
-async function getAgencyById(payload: any, agencyId: string) {
+async function getAgencyById(payload: any, agencyId: number) {
   const result = await payload.find({
     collection: 'agencies',
     overrideAccess: true,
@@ -24,7 +24,7 @@ async function getAgencyById(payload: any, agencyId: string) {
   return result.docs[0] || null
 }
 
-async function getCustomerById(payload: any, customerId: string) {
+async function getCustomerById(payload: any, customerId: number) {
   const result = await payload.find({
     collection: 'customers',
     overrideAccess: true,
@@ -35,7 +35,7 @@ async function getCustomerById(payload: any, customerId: string) {
   return result.docs[0] || null
 }
 
-async function getUserById(payload: any, userId: string) {
+async function getUserById(payload: any, userId: number) {
   const result = await payload.find({
     collection: 'users',
     overrideAccess: true,
@@ -77,9 +77,9 @@ export async function createAgencyUser(formData: FormData) {
   }
 
   const payload = await getPayloadClient() as any
-  const requestedAgencyId = text(formData, 'agencyId')
-  const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : String(getId(actor.agency) || '')
-  if (!agencyId) throw new Error('Agency is required.')
+  const requestedAgencyId = getId(text(formData, 'agencyId'))
+  const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : getId(actor.agency)
+  if (typeof agencyId !== 'number') throw new Error('Agency is required.')
   if (!(await getAgencyById(payload, agencyId))) throw new Error('Agency was not found.')
 
   const role = text(formData, 'role')
@@ -112,9 +112,9 @@ export async function createCustomer(formData: FormData) {
   }
 
   const payload = await getPayloadClient() as any
-  const requestedAgencyId = text(formData, 'agencyId')
-  const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : String(getId(actor.agency) || '')
-  if (!agencyId) throw new Error('Agency is required.')
+  const requestedAgencyId = getId(text(formData, 'agencyId'))
+  const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : getId(actor.agency)
+  if (typeof agencyId !== 'number') throw new Error('Agency is required.')
   if (!(await getAgencyById(payload, agencyId))) throw new Error('Agency was not found.')
 
   const customer = await payload.create({
@@ -138,7 +138,10 @@ export async function createCustomer(formData: FormData) {
 export async function createCustomerUser(formData: FormData) {
   const actor = await requireUser()
   const payload = await getPayloadClient() as any
-  const customerId = text(formData, 'customerId')
+  const customerId = getId(text(formData, 'customerId'))
+  if (typeof customerId !== 'number') {
+    throw new Error('Customer is required.')
+  }
   const customer = await getCustomerById(payload, customerId)
   if (!customer) {
     throw new Error('Customer was not found.')
@@ -154,6 +157,11 @@ export async function createCustomerUser(formData: FormData) {
     throw new Error('Invalid customer role.')
   }
 
+  const customerAgencyId = getId(customer.agency)
+  if (typeof customerAgencyId !== 'number') {
+    throw new Error('Customer agency is invalid.')
+  }
+
   await payload.create({
     collection: 'users',
     overrideAccess: true,
@@ -163,7 +171,7 @@ export async function createCustomerUser(formData: FormData) {
       email: text(formData, 'email').toLowerCase(),
       role,
       status: 'invited',
-      agency: getId(customer.agency),
+      agency: customerAgencyId,
       customer: customer.id,
     },
   })
@@ -179,8 +187,14 @@ export async function createAssignment(formData: FormData) {
   }
 
   const payload = await getPayloadClient() as any
-  const customerId = text(formData, 'customerId')
-  const agencyUserId = text(formData, 'agencyUserId')
+  const customerId = getId(text(formData, 'customerId'))
+  if (typeof customerId !== 'number') {
+    throw new Error('Customer is required.')
+  }
+  const agencyUserId = getId(text(formData, 'agencyUserId'))
+  if (typeof agencyUserId !== 'number') {
+    throw new Error('Agency user is required.')
+  }
   const [customer, agencyUser] = await Promise.all([
     getCustomerById(payload, customerId),
     getUserById(payload, agencyUserId),
@@ -198,13 +212,15 @@ export async function createAssignment(formData: FormData) {
 
   const customerAgencyId = getId(customer.agency)
   const agencyUserAgencyId = getId(agencyUser.agency)
-  if (!customerAgencyId || !agencyUserAgencyId || String(customerAgencyId) !== String(agencyUserAgencyId)) {
+  if (typeof customerAgencyId !== 'number' || typeof agencyUserAgencyId !== 'number' || customerAgencyId !== agencyUserAgencyId) {
     throw new Error('Customer and agency user must belong to the same agency.')
   }
 
-  if (!isPlatformAdmin(actor) && String(getId(actor.agency)) !== String(customerAgencyId)) {
+  if (!isPlatformAdmin(actor) && getId(actor.agency) !== customerAgencyId) {
     throw new Error('You do not have permission to assign users outside your agency.')
   }
+
+  const assignedBy = getId(actor.id)
 
   await payload.create({
     collection: 'agency-customer-assignments',
@@ -214,7 +230,7 @@ export async function createAssignment(formData: FormData) {
       agency: customerAgencyId,
       agencyUser: agencyUserId,
       customer: customer.id,
-      assignedBy: getId(actor.id),
+      assignedBy: typeof assignedBy === 'number' ? assignedBy : undefined,
       status: 'active',
     },
   })

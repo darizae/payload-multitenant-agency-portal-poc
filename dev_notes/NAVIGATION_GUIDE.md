@@ -12,6 +12,30 @@ This prototype has two surfaces:
 3. Run `npm run dev`
 4. Visit `http://localhost:3000/login`
 
+## Complete seeded users (all use cases)
+
+Default seeded credentials:
+
+- Password for all active seeded users: `Passw0rd!Demo`
+
+Accounts created by `scripts/seed.ts`:
+
+- Platform admin (platform-level tenancy): `platform.admin@poc.local` / `Passw0rd!Demo`
+- Alpha agency admin (agency management and invites): `alpha.admin@poc.local` / `Passw0rd!Demo`
+- Alpha agency manager (agency manager with global customer access): `alpha.manager@poc.local` / `Passw0rd!Demo`
+- Alpha restricted agency user (assigned only to Northwind Bikes): `alpha.user@poc.local` / `Passw0rd!Demo`
+- Beta agency admin (cross-agency isolation checks): `beta.admin@poc.local` / `Passw0rd!Demo`
+- Northwind customer admin: `store1.admin@poc.local` / `Passw0rd!Demo`
+- Northwind customer standard user: `store1.user@poc.local` / `Passw0rd!Demo`
+- Summit customer admin (second customer under Alpha Agency): `store2.admin@poc.local` / `Passw0rd!Demo`
+- Orbit customer admin (customer under Beta Agency): `orbit.admin@poc.local` / `Passw0rd!Demo`
+- Pending invited customer user (invite activation flow): `pending.invite@poc.local` / no password until invite activation
+
+Environment overrides:
+
+- Platform admin defaults can be overridden with `SEED_PLATFORM_ADMIN_EMAIL` and `SEED_PLATFORM_ADMIN_PASSWORD`
+- Alpha agency admin defaults can be overridden with `SEED_AGENCY_ADMIN_EMAIL` and `SEED_AGENCY_ADMIN_PASSWORD`
+
 ## Recommended walkthrough
 
 ### 1. Log in as platform admin

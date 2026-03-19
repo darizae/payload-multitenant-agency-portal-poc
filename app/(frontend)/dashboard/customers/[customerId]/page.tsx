@@ -82,7 +82,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <Typography variant="h6" gutterBottom>Assign agency user</Typography>
             <Stack component="form" action={createAssignment} spacing={2}>
               <input type="hidden" name="customerId" value={customerId} />
-              <TextField name="agencyUserId" label="Agency user" select defaultValue="">
+              <TextField name="agencyUserId" label="Agency user" select defaultValue="" required>
                 {data.agencyUsers.map((agencyUser: any) => (
                   <MenuItem key={agencyUser.id} value={agencyUser.id}>{agencyUser.name} · {agencyUser.role}</MenuItem>
                 ))}

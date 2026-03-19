@@ -96,11 +96,15 @@ export async function getVisibleCustomers(user: AppUserLike) {
 
 export async function getAgencyPageData(user: AppUserLike, agencyId: string | number) {
   const payload = await getPayloadClient()
+  const resolvedAgencyId = getId(agencyId)
   if (!canAccessAgencyWorkspace(user)) {
     return null
   }
+  if (typeof resolvedAgencyId !== 'number') {
+    return null
+  }
 
-  if (!isPlatformAdmin(user) && String(getId(user.agency)) !== String(agencyId)) {
+  if (!isPlatformAdmin(user) && getId(user.agency) !== resolvedAgencyId) {
     return null
   }
 
@@ -109,7 +113,7 @@ export async function getAgencyPageData(user: AppUserLike, agencyId: string | nu
     overrideAccess: true,
     depth: 0,
     limit: 1,
-    where: { id: { equals: agencyId } },
+    where: { id: { equals: resolvedAgencyId } },
   })
   const agency = agencyResult.docs[0]
   if (!agency) {
@@ -117,11 +121,11 @@ export async function getAgencyPageData(user: AppUserLike, agencyId: string | nu
   }
 
   const [customers, users, assignments, invites] = await Promise.all([
-    payload.find({ collection: 'customers', overrideAccess: true, depth: 1, limit: 200, sort: 'name', where: { agency: { equals: agencyId } } }),
-    payload.find({ collection: 'users', overrideAccess: true, depth: 1, limit: 200, sort: 'name', where: { agency: { equals: agencyId } } }),
-    payload.find({ collection: 'agency-customer-assignments', overrideAccess: true, depth: 1, limit: 200, where: { agency: { equals: agencyId } } }),
+    payload.find({ collection: 'customers', overrideAccess: true, depth: 1, limit: 200, sort: 'name', where: { agency: { equals: resolvedAgencyId } } }),
+    payload.find({ collection: 'users', overrideAccess: true, depth: 1, limit: 200, sort: 'name', where: { agency: { equals: resolvedAgencyId } } }),
+    payload.find({ collection: 'agency-customer-assignments', overrideAccess: true, depth: 1, limit: 200, where: { agency: { equals: resolvedAgencyId } } }),
     isPlatformAdmin(user) || isAgencyAdmin(user)
-      ? payload.find({ collection: 'invite-tokens', overrideAccess: true, depth: 1, limit: 200, sort: '-createdAt', where: { agency: { equals: agencyId } } })
+      ? payload.find({ collection: 'invite-tokens', overrideAccess: true, depth: 1, limit: 200, sort: '-createdAt', where: { agency: { equals: resolvedAgencyId } } })
       : Promise.resolve({ docs: [] }),
   ])
 
@@ -130,13 +134,17 @@ export async function getAgencyPageData(user: AppUserLike, agencyId: string | nu
 
 export async function getCustomerPageData(user: AppUserLike, customerId: string | number) {
   const payload = await getPayloadClient()
+  const resolvedCustomerId = getId(customerId)
+  if (typeof resolvedCustomerId !== 'number') {
+    return null
+  }
   const assignedCustomerIds = await getAssignedCustomerIdsForUser(user)
   const customerResult = await payload.find({
     collection: 'customers',
     overrideAccess: true,
     depth: 1,
     limit: 1,
-    where: { id: { equals: customerId } },
+    where: { id: { equals: resolvedCustomerId } },
   })
   const customer = customerResult.docs[0]
   if (!customer) {
@@ -151,10 +159,10 @@ export async function getCustomerPageData(user: AppUserLike, customerId: string 
   const canAssignAgencyUsers = isPlatformAdmin(user) || isAgencyAdmin(user)
 
   const [customerUsers, assignments, invites, agencyUsers] = await Promise.all([
-    payload.find({ collection: 'users', overrideAccess: true, depth: 1, limit: 200, where: { customer: { equals: customerId } }, sort: 'name' }),
-    payload.find({ collection: 'agency-customer-assignments', overrideAccess: true, depth: 1, limit: 200, where: { customer: { equals: customerId } } }),
+    payload.find({ collection: 'users', overrideAccess: true, depth: 1, limit: 200, where: { customer: { equals: resolvedCustomerId } }, sort: 'name' }),
+    payload.find({ collection: 'agency-customer-assignments', overrideAccess: true, depth: 1, limit: 200, where: { customer: { equals: resolvedCustomerId } } }),
     canManageUsers
-      ? payload.find({ collection: 'invite-tokens', overrideAccess: true, depth: 1, limit: 200, where: { customer: { equals: customerId } }, sort: '-createdAt' })
+      ? payload.find({ collection: 'invite-tokens', overrideAccess: true, depth: 1, limit: 200, where: { customer: { equals: resolvedCustomerId } }, sort: '-createdAt' })
       : Promise.resolve({ docs: [] }),
     canAssignAgencyUsers
       ? payload.find({
