@@ -3,9 +3,7 @@ import { withPayload } from '@payloadcms/next/withPayload'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    reactCompiler: false,
-  },
+  reactCompiler: false,
   webpack: (config) => {
     config.resolve.alias = {
       ...(config.resolve.alias || {}),
