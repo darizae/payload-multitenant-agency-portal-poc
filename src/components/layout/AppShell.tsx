@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import Link from 'next/link'
-import { AppBar, Box, Button, Chip, Container, Stack, Toolbar, Typography } from '@mui/material'
+import { AppBar, Box, Chip, Container, Stack, Toolbar, Typography } from '@mui/material'
 import type { AppUserLike } from '@/lib/types'
 import { LogoutButton } from '@/components/layout/LogoutButton'
+import { LinkButton } from '@/components/mui/LinkButton'
 
 export function AppShell({ user, children }: { user: AppUserLike; children: ReactNode }) {
   return (
@@ -13,8 +13,8 @@ export function AppShell({ user, children }: { user: AppUserLike; children: Reac
             Agency Portal POC
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Button component={Link} href="/dashboard">Dashboard</Button>
-            <Button component={Link} href="/dashboard/agencies">Agencies</Button>
+            <LinkButton href="/dashboard">Dashboard</LinkButton>
+            <LinkButton href="/dashboard/agencies">Agencies</LinkButton>
             <Chip label={`${user.name || user.email} · ${user.role}`} color="primary" variant="outlined" />
             <LogoutButton />
           </Stack>

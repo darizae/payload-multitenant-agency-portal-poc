@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { Button, Card, CardContent, Grid, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
 import { getVisibleAgencies } from '@/lib/services/portal'
 import { createAgency } from '@/lib/actions/portal'
 import { isPlatformAdmin } from '@/lib/permissions'
+import { LinkButton } from '@/components/mui/LinkButton'
 
 export default async function AgenciesPage() {
   const user = await requireUser()
@@ -43,7 +43,7 @@ export default async function AgenciesPage() {
                   <Typography fontWeight={700}>{agency.name}</Typography>
                   <Typography color="text.secondary">Status: {agency.status}</Typography>
                 </div>
-                <Button component={Link} href={`/dashboard/agencies/${agency.id}`} variant="outlined">Open agency</Button>
+                <LinkButton href={`/dashboard/agencies/${agency.id}`} variant="outlined">Open agency</LinkButton>
               </Stack>
             ))}
           </Stack>

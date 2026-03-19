@@ -1,7 +1,7 @@
-import Link from 'next/link'
 import { Button, Card, CardContent, Grid, Stack, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
 import { getDashboardStats, getVisibleCustomers } from '@/lib/services/portal'
+import { LinkButton } from '@/components/mui/LinkButton'
 
 export default async function DashboardPage() {
   const user = await requireUser()
@@ -14,7 +14,7 @@ export default async function DashboardPage() {
           <Typography variant="h4">Dashboard</Typography>
         </div>
         <Stack direction="row" spacing={1}>
-          <Button component={Link} href="/dashboard/agencies" variant="contained">Browse agencies</Button>
+          <LinkButton href="/dashboard/agencies" variant="contained">Browse agencies</LinkButton>
         </Stack>
       </Stack>
 
@@ -51,7 +51,7 @@ export default async function DashboardPage() {
                   <Typography fontWeight={700}>{customer.name}</Typography>
                   <Typography color="text.secondary">Status: {customer.status}</Typography>
                 </div>
-                <Button component={Link} href={`/dashboard/customers/${customer.id}`} variant="outlined">Open customer</Button>
+                <LinkButton href={`/dashboard/customers/${customer.id}`} variant="outlined">Open customer</LinkButton>
               </Stack>
             ))}
             {customers.docs.length === 0 ? (

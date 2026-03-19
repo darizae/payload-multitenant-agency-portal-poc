@@ -1,10 +1,10 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { Box, Button, Card, CardContent, Checkbox, FormControlLabel, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
 import { getAgencyPageData } from '@/lib/services/portal'
 import { createAgencyUser, createCustomer } from '@/lib/actions/portal'
 import { canManageAgencyUsers, canManageCustomer } from '@/lib/rules'
+import { LinkButton } from '@/components/mui/LinkButton'
 
 export default async function AgencyDetailPage({ params }: { params: Promise<{ agencyId: string }> }) {
   const user = await requireUser()
@@ -112,7 +112,7 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
                       <Typography fontWeight={700}>{customer.name}</Typography>
                       <Typography color="text.secondary">{customer.status}</Typography>
                     </Box>
-                    <Button component={Link} href={`/dashboard/customers/${customer.id}`} variant="outlined">Open</Button>
+                    <LinkButton href={`/dashboard/customers/${customer.id}`} variant="outlined">Open</LinkButton>
                   </Stack>
                 ))}
               </Stack>
