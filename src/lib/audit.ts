@@ -15,7 +15,7 @@ export async function writeAuditLog(params: {
 }) {
   const { payload, actor, action, entityType, entityId, agency, customer, summary, metadata } = params
 
-  await payload.create({
+  await (payload as any).create({
     collection: 'audit-logs',
     overrideAccess: true,
     data: {

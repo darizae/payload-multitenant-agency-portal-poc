@@ -3,7 +3,7 @@ import { APIError } from 'payload'
 import { customersReadAccess, canAccessAdminPanel } from '@/lib/access'
 import { isPlatformAdmin, isAgencyAdmin, isAgencyManager } from '@/lib/permissions'
 import { getId } from '@/lib/utils'
-import { validateCustomerBusinessRules } from '@/lib/guards'
+import { validateCustomerBusinessRules, validateCustomerDeletePermissions, validateCustomerWritePermissions } from '@/lib/guards'
 import { writeAuditLog } from '@/lib/audit'
 
 export const Customers: CollectionConfig = {
@@ -32,17 +32,37 @@ export const Customers: CollectionConfig = {
       }
       return false
     },
-    delete: ({ req }) => isPlatformAdmin(req.user as any) || isAgencyAdmin(req.user as any),
+    delete: ({ req }) => {
+      const user = req.user as any
+      if (isPlatformAdmin(user)) return true
+      if (isAgencyAdmin(user)) {
+        const agencyId = getId(user?.agency)
+        return agencyId ? { agency: { equals: agencyId } } : false
+      }
+      return false
+    },
   },
   hooks: {
     beforeChange: [
-      async ({ data, originalDoc }) => {
+      async ({ data, originalDoc, req, operation }) => {
+        validateCustomerWritePermissions({
+          actor: req.user as any,
+          originalDoc,
+          nextData: data || {},
+          operation,
+        })
         await validateCustomerBusinessRules({ originalDoc, nextData: data || {} })
         return data
       },
     ],
     beforeDelete: [
       async ({ req, id }) => {
+        const customer = await req.payload.findByID({ collection: 'customers', id, overrideAccess: true, depth: 0 })
+        validateCustomerDeletePermissions({
+          actor: req.user as any,
+          targetDoc: customer,
+        })
+
         const assignments = await req.payload.count({
           collection: 'agency-customer-assignments',
           overrideAccess: true,

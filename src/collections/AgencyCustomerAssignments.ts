@@ -1,9 +1,27 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { canAccessAdminPanel, customersReadAccess } from '@/lib/access'
-import { isPlatformAdmin, isAgencyAdmin } from '@/lib/permissions'
+import { canAccessAdminPanel } from '@/lib/access'
+import { isPlatformAdmin, isAgencyAdmin, isAgencyManager } from '@/lib/permissions'
+import { validateAssignmentWritePermissions } from '@/lib/guards'
 import { getId } from '@/lib/utils'
 import { writeAuditLog } from '@/lib/audit'
+
+async function getAssignedCustomerIds(req: any, userId: string | number): Promise<Array<string | number>> {
+  const assignments = await req.payload.find({
+    collection: 'agency-customer-assignments',
+    depth: 0,
+    limit: 200,
+    overrideAccess: true,
+    where: {
+      and: [
+        { agencyUser: { equals: userId } },
+        { status: { equals: 'active' } },
+      ],
+    },
+  })
+
+  return (assignments.docs || []).map((doc: any) => doc.customer).filter(Boolean)
+}
 
 export const AgencyCustomerAssignments: CollectionConfig = {
   slug: 'agency-customer-assignments',
@@ -17,23 +35,76 @@ export const AgencyCustomerAssignments: CollectionConfig = {
       const user = req.user as any
       if (!user) return false
       if (isPlatformAdmin(user)) return true
+      const role = String(user?.role || '')
       const agencyId = getId(user?.agency)
       if (!agencyId) return false
-      return { agency: { equals: agencyId } }
+      if (isAgencyAdmin(user) || isAgencyManager(user)) {
+        return { agency: { equals: agencyId } }
+      }
+      if (role === 'customer-admin' || role === 'customer-user') {
+        const customerId = getId(user?.customer)
+        return customerId ? { customer: { equals: customerId } } : false
+      }
+      const userId = getId(user?.id)
+      if (!userId) return false
+      const assignedCustomerIds = await getAssignedCustomerIds(req, userId)
+      if (assignedCustomerIds.length === 0) {
+        return {
+          and: [
+            { agency: { equals: agencyId } },
+            { agencyUser: { equals: userId } },
+          ],
+        }
+      }
+      return {
+        and: [
+          { agency: { equals: agencyId } },
+          {
+            or: [
+              { agencyUser: { equals: userId } },
+              { customer: { in: assignedCustomerIds } },
+            ],
+          },
+        ],
+      }
     },
     create: ({ req }) => isPlatformAdmin(req.user as any) || isAgencyAdmin(req.user as any),
-    update: ({ req }) => isPlatformAdmin(req.user as any) || isAgencyAdmin(req.user as any),
-    delete: ({ req }) => isPlatformAdmin(req.user as any) || isAgencyAdmin(req.user as any),
+    update: ({ req }) => {
+      const user = req.user as any
+      if (isPlatformAdmin(user)) return true
+      if (isAgencyAdmin(user)) {
+        const agencyId = getId(user?.agency)
+        return agencyId ? { agency: { equals: agencyId } } : false
+      }
+      return false
+    },
+    delete: ({ req }) => {
+      const user = req.user as any
+      if (isPlatformAdmin(user)) return true
+      if (isAgencyAdmin(user)) {
+        const agencyId = getId(user?.agency)
+        return agencyId ? { agency: { equals: agencyId } } : false
+      }
+      return false
+    },
   },
   hooks: {
     beforeValidate: [
-      async ({ data, req }) => {
-        if (!data) return data
-        const agencyUserId = getId(data.agencyUser)
-        const customerId = getId(data.customer)
-        const agencyId = getId(data.agency)
+      async ({ data, req, originalDoc }) => {
+        if (!data && !originalDoc) return data
+        const draft = {
+          ...originalDoc,
+          ...(data || {}),
+        }
+        const agencyUserId = getId(draft.agencyUser)
+        const customerId = getId(draft.customer)
+        const agencyId = getId(draft.agency)
 
         if (!agencyUserId || !customerId || !agencyId) return data
+        validateAssignmentWritePermissions({
+          actor: req.user as any,
+          assignmentAgency: agencyId,
+        })
 
         const [agencyUser, customer] = await Promise.all([
           req.payload.findByID({ collection: 'users', id: agencyUserId, overrideAccess: true, depth: 0 }),
@@ -50,27 +121,31 @@ export const AgencyCustomerAssignments: CollectionConfig = {
           throw new APIError('Assignment agency, agency user, and customer must all belong to the same agency.', 400)
         }
 
-        const existing = await req.payload.find({
-          collection: 'agency-customer-assignments',
-          depth: 0,
-          limit: 1,
-          overrideAccess: true,
-          where: {
-            and: [
-              { agencyUser: { equals: agencyUserId } },
-              { customer: { equals: customerId } },
-              { status: { equals: 'active' } },
-            ],
-          },
-        })
+        if (draft.status === 'active') {
+          const existing = await req.payload.find({
+            collection: 'agency-customer-assignments',
+            depth: 0,
+            limit: 1,
+            overrideAccess: true,
+            where: {
+              and: [
+                { agencyUser: { equals: agencyUserId } },
+                { customer: { equals: customerId } },
+                { status: { equals: 'active' } },
+              ],
+            },
+          })
 
-        if (existing.totalDocs > 0 && (!data.id || String(existing.docs[0].id) !== String(data.id))) {
-          throw new APIError('This agency user is already actively assigned to that customer.', 400)
+          const currentId = getId(originalDoc?.id)
+          if (existing.totalDocs > 0 && String(existing.docs[0].id) !== String(currentId)) {
+            throw new APIError('This agency user is already actively assigned to that customer.', 400)
+          }
         }
 
-        data.assignmentLabel = `${agencyUser.name || agencyUser.email} → ${customer.name}`
-        data.assignedAt = data.assignedAt || new Date().toISOString()
-        return data
+        const nextData = data || {}
+        nextData.assignmentLabel = `${agencyUser.name || agencyUser.email} → ${customer.name}`
+        nextData.assignedAt = draft.assignedAt || new Date().toISOString()
+        return nextData
       },
     ],
     afterChange: [

@@ -1,8 +1,8 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
 import { canAccessAdminPanel, usersReadAccess } from '@/lib/access'
-import { validateUserBusinessRules } from '@/lib/guards'
-import { canAccessPayloadAdmin, isPlatformAdmin, isAgencyAdmin, isCustomerAdmin } from '@/lib/permissions'
+import { validateUserBusinessRules, validateUserDeletePermissions, validateUserWritePermissions } from '@/lib/guards'
+import { isPlatformAdmin, isAgencyAdmin, isCustomerAdmin } from '@/lib/permissions'
 import { getId, randomToken } from '@/lib/utils'
 import { issueInvite } from '@/lib/invites'
 import { writeAuditLog } from '@/lib/audit'
@@ -27,10 +27,30 @@ export const Users: CollectionConfig = {
     },
     update: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user) || isAgencyAdmin(user) || isCustomerAdmin(user)) return true
+      if (isPlatformAdmin(user)) return true
+      if (isAgencyAdmin(user)) {
+        const agencyId = getId(user?.agency)
+        return agencyId ? { agency: { equals: agencyId } } : false
+      }
+      if (isCustomerAdmin(user)) {
+        const customerId = getId(user?.customer)
+        return customerId ? { customer: { equals: customerId } } : false
+      }
       return { id: { equals: getId(user?.id) } }
     },
-    delete: ({ req }) => isPlatformAdmin(req.user as any) || isAgencyAdmin(req.user as any) || isCustomerAdmin(req.user as any),
+    delete: ({ req }) => {
+      const user = req.user as any
+      if (isPlatformAdmin(user)) return true
+      if (isAgencyAdmin(user)) {
+        const agencyId = getId(user?.agency)
+        return agencyId ? { agency: { equals: agencyId } } : false
+      }
+      if (isCustomerAdmin(user)) {
+        const customerId = getId(user?.customer)
+        return customerId ? { customer: { equals: customerId } } : false
+      }
+      return false
+    },
   },
   hooks: {
     beforeValidate: [
@@ -43,11 +63,17 @@ export const Users: CollectionConfig = {
       },
     ],
     beforeChange: [
-      async ({ data, req, originalDoc }) => {
+      async ({ data, req, originalDoc, operation }) => {
         const next = await validateUserBusinessRules({
           payload: req.payload,
           originalDoc,
           nextData: data || {},
+        })
+        validateUserWritePermissions({
+          actor: req.user as any,
+          originalDoc,
+          nextData: next,
+          operation,
         })
         return next
       },
@@ -56,6 +82,10 @@ export const Users: CollectionConfig = {
       async ({ req, id }) => {
         const doc = await req.payload.findByID({ collection: 'users', id, overrideAccess: true, depth: 0 })
         if (!doc) return
+        validateUserDeletePermissions({
+          actor: req.user as any,
+          targetDoc: doc,
+        })
 
         if (doc.role === 'agency-admin' && doc.status === 'active' && doc.agency) {
           const count = await req.payload.count({

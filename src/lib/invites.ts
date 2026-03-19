@@ -12,7 +12,7 @@ export async function issueInvite(params: {
   agency?: string | number | null
   customer?: string | number | null
 }) {
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const token = randomToken(20)
   const expiresAt = addHours(new Date(), ttlHours).toISOString()
 

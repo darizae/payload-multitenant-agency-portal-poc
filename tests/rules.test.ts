@@ -3,6 +3,7 @@ import {
   assertLastAgencyAdminProtection,
   assertLastCustomerAdminProtection,
   assertNoAgencyTransfer,
+  canManageCustomerUsers,
   canUserSeeCustomer,
   validateUserShape,
 } from '@/lib/rules'
@@ -67,5 +68,23 @@ describe('business rules', () => {
         customer: { id: 'cust-2', agency: 'agency-1' },
       }),
     ).toBe(false)
+  })
+
+  it('blocks agency admins from managing customer users across agencies', () => {
+    expect(
+      canManageCustomerUsers({
+        user: { role: 'agency-admin', agency: 'agency-1' },
+        customer: { id: 'cust-9', agency: 'agency-2' },
+      }),
+    ).toBe(false)
+  })
+
+  it('allows agency admins to manage customer users in their own agency', () => {
+    expect(
+      canManageCustomerUsers({
+        user: { role: 'agency-admin', agency: 'agency-1' },
+        customer: { id: 'cust-9', agency: 'agency-1' },
+      }),
+    ).toBe(true)
   })
 })

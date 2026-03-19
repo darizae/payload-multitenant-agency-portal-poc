@@ -77,11 +77,21 @@ export function canManageCustomerUsers(params: {
 }): boolean {
   const { user, customer, assignedCustomerIds = [] } = params
   if (!user || !customer) return false
-  if (isPlatformAdmin(user) || isAgencyAdmin(user)) return true
+  if (isPlatformAdmin(user)) return true
+  const userAgencyId = getId(user.agency)
+  const customerAgencyId = getId(customer.agency)
+  if (!userAgencyId || !customerAgencyId || String(userAgencyId) !== String(customerAgencyId)) {
+    return false
+  }
+  if (isAgencyAdmin(user)) return true
   if (isAgencyManager(user) || getRole(user) === 'agency-user') {
     return assignedCustomerIds.map(String).includes(String(customer.id))
   }
   return isCustomerAdmin(user) && sameId(user.customer, customer.id)
+}
+
+export function canAccessAgencyWorkspace(user?: AppUserLike | null): boolean {
+  return isPlatformAdmin(user) || isAgencyAdmin(user) || isAgencyManager(user)
 }
 
 export function assertNoAgencyTransfer(params: {

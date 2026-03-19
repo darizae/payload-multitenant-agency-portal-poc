@@ -4,14 +4,46 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
 import { getPayloadClient } from '@/lib/payload'
-import { issueInvite } from '@/lib/invites'
 import { getId } from '@/lib/utils'
-import { canManageAgencyUsers, canManageCustomer, canManageCustomerUsers } from '@/lib/rules'
+import { canManageAgencyUsers, canManageCustomerUsers } from '@/lib/rules'
 import { getAssignedCustomerIdsForUser } from '@/lib/services/portal'
-import { isPlatformAdmin, isAgencyAdmin, isAgencyManager, isCustomerAdmin } from '@/lib/permissions'
+import { isPlatformAdmin, isAgencyAdmin, isAgencyManager } from '@/lib/permissions'
 
 function text(formData: FormData, key: string): string {
   return String(formData.get(key) || '').trim()
+}
+
+async function getAgencyById(payload: any, agencyId: string) {
+  const result = await payload.find({
+    collection: 'agencies',
+    overrideAccess: true,
+    depth: 0,
+    limit: 1,
+    where: { id: { equals: agencyId } },
+  })
+  return result.docs[0] || null
+}
+
+async function getCustomerById(payload: any, customerId: string) {
+  const result = await payload.find({
+    collection: 'customers',
+    overrideAccess: true,
+    depth: 1,
+    limit: 1,
+    where: { id: { equals: customerId } },
+  })
+  return result.docs[0] || null
+}
+
+async function getUserById(payload: any, userId: string) {
+  const result = await payload.find({
+    collection: 'users',
+    overrideAccess: true,
+    depth: 0,
+    limit: 1,
+    where: { id: { equals: userId } },
+  })
+  return result.docs[0] || null
 }
 
 export async function createAgency(formData: FormData) {
@@ -20,7 +52,7 @@ export async function createAgency(formData: FormData) {
     throw new Error('Only platform admins can create agencies.')
   }
 
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const agency = await payload.create({
     collection: 'agencies',
     overrideAccess: true,
@@ -44,17 +76,18 @@ export async function createAgencyUser(formData: FormData) {
     throw new Error('You do not have permission to create agency users.')
   }
 
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const requestedAgencyId = text(formData, 'agencyId')
   const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : String(getId(actor.agency) || '')
   if (!agencyId) throw new Error('Agency is required.')
+  if (!(await getAgencyById(payload, agencyId))) throw new Error('Agency was not found.')
 
   const role = text(formData, 'role')
   if (!['agency-admin', 'agency-manager', 'agency-user'].includes(role)) {
     throw new Error('Invalid agency role.')
   }
 
-  const user = await payload.create({
+  await payload.create({
     collection: 'users',
     overrideAccess: true,
     user: actor as any,
@@ -78,10 +111,11 @@ export async function createCustomer(formData: FormData) {
     throw new Error('You do not have permission to create customers.')
   }
 
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const requestedAgencyId = text(formData, 'agencyId')
   const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : String(getId(actor.agency) || '')
   if (!agencyId) throw new Error('Agency is required.')
+  if (!(await getAgencyById(payload, agencyId))) throw new Error('Agency was not found.')
 
   const customer = await payload.create({
     collection: 'customers',
@@ -103,9 +137,12 @@ export async function createCustomer(formData: FormData) {
 
 export async function createCustomerUser(formData: FormData) {
   const actor = await requireUser()
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const customerId = text(formData, 'customerId')
-  const customer = await payload.findByID({ collection: 'customers', id: customerId, overrideAccess: true, depth: 1 })
+  const customer = await getCustomerById(payload, customerId)
+  if (!customer) {
+    throw new Error('Customer was not found.')
+  }
   const assignedCustomerIds = await getAssignedCustomerIdsForUser(actor)
 
   if (!canManageCustomerUsers({ user: actor, customer, assignedCustomerIds })) {
@@ -141,17 +178,40 @@ export async function createAssignment(formData: FormData) {
     throw new Error('Only platform admins and agency admins can create assignments.')
   }
 
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const customerId = text(formData, 'customerId')
   const agencyUserId = text(formData, 'agencyUserId')
-  const customer = await payload.findByID({ collection: 'customers', id: customerId, overrideAccess: true, depth: 0 })
+  const [customer, agencyUser] = await Promise.all([
+    getCustomerById(payload, customerId),
+    getUserById(payload, agencyUserId),
+  ])
+
+  if (!customer) {
+    throw new Error('Customer was not found.')
+  }
+  if (!agencyUser) {
+    throw new Error('Agency user was not found.')
+  }
+  if (agencyUser.role === 'customer-admin' || agencyUser.role === 'customer-user') {
+    throw new Error('Only agency-side users can be assigned to customers.')
+  }
+
+  const customerAgencyId = getId(customer.agency)
+  const agencyUserAgencyId = getId(agencyUser.agency)
+  if (!customerAgencyId || !agencyUserAgencyId || String(customerAgencyId) !== String(agencyUserAgencyId)) {
+    throw new Error('Customer and agency user must belong to the same agency.')
+  }
+
+  if (!isPlatformAdmin(actor) && String(getId(actor.agency)) !== String(customerAgencyId)) {
+    throw new Error('You do not have permission to assign users outside your agency.')
+  }
 
   await payload.create({
     collection: 'agency-customer-assignments',
     overrideAccess: true,
     user: actor as any,
     data: {
-      agency: getId(customer.agency),
+      agency: customerAgencyId,
       agencyUser: agencyUserId,
       customer: customer.id,
       assignedBy: getId(actor.id),
@@ -164,7 +224,7 @@ export async function createAssignment(formData: FormData) {
 }
 
 export async function activateInvite(formData: FormData) {
-  const payload = await getPayloadClient()
+  const payload = await getPayloadClient() as any
   const token = text(formData, 'token')
   const password = text(formData, 'password')
   const passwordConfirm = text(formData, 'passwordConfirm')

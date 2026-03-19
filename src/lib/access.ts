@@ -72,6 +72,9 @@ export const usersReadAccess: Access = async ({ req }) => {
 
   if (isCustomerAdmin(user)) {
     const customerId = getId(user.customer)
+    if (!customerId) {
+      return { id: { equals: getId(user.id) } }
+    }
     return {
       or: [
         { id: { equals: getId(user.id) } },
@@ -92,10 +95,18 @@ export const usersReadAccess: Access = async ({ req }) => {
   }
 
   const assignedCustomerIds = await getAssignedCustomerIds(req)
+  if (assignedCustomerIds.length === 0) {
+    return { id: { equals: getId(user.id) } }
+  }
   return {
-    or: [
-      { id: { equals: getId(user.id) } },
-      { customer: { in: assignedCustomerIds } },
+    and: [
+      { agency: { equals: agencyId } },
+      {
+        or: [
+          { id: { equals: getId(user.id) } },
+          { customer: { in: assignedCustomerIds } },
+        ],
+      },
     ],
   }
 }
