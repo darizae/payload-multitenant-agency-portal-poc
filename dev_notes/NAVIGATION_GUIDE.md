@@ -108,7 +108,25 @@ This demonstrates:
 - **FR-18 Customer User Isolation**
 - customer-scoped administration
 
-### 6. Activate an invite
+### 6. Log in as customer standard user
+
+Use:
+
+- Email: `store1.user@poc.local`
+- Password: `Passw0rd!Demo`
+
+They should:
+
+- See only their own customer workspace
+- Be unable to invite users or perform admin actions
+- Be unable to access other customers or agency-wide management
+
+This demonstrates:
+
+- **FR-18 Customer User Isolation**
+- least-privilege customer access for non-admin users
+
+### 7. Activate an invite
 
 Any invited user creates an `invite-tokens` document automatically.
 

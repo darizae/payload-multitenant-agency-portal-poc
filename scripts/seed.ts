@@ -1,4 +1,4 @@
-import config from '../payload.config.ts'
+import config from '../payload.config'
 import { getPayload } from 'payload'
 
 async function upsertAgency(payload: any, name: string, data: Record<string, any>) {
@@ -163,7 +163,7 @@ async function main() {
     customer: storeOne.id,
   })
 
-  await upsertUser(payload, 'store1.user@poc.local', {
+  const northwindUser = await upsertUser(payload, 'store1.user@poc.local', {
     name: 'Northwind Staff',
     password: 'Passw0rd!Demo',
     role: 'customer-user',
@@ -213,6 +213,7 @@ async function main() {
   console.log('Platform admin:', platformAdmin.email)
   console.log('Agency admin:', alphaAdmin.email)
   console.log('Customer admin:', northwindAdmin.email)
+  console.log('Customer user:', northwindUser.email)
   console.log('All seeded passwords use: Passw0rd!Demo')
 }
 

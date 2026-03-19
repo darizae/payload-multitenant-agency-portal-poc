@@ -1,4 +1,4 @@
-import { headers } from 'next/headers'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getPayloadClient } from '@/lib/payload'
 import { canAccessPayloadAdmin } from '@/lib/permissions'
@@ -6,7 +6,15 @@ import type { AppUserLike } from '@/lib/types'
 
 export async function getCurrentUser(): Promise<AppUserLike | null> {
   const payload = await getPayloadClient()
-  const result = await payload.auth({ headers: await headers() })
+  const token = (await cookies()).get('payload-token')?.value
+  if (!token) {
+    return null
+  }
+  const result = await payload.auth({
+    headers: new Headers({
+      authorization: `Bearer ${token}`,
+    }),
+  })
   return (result?.user as AppUserLike | null | undefined) ?? null
 }
 
