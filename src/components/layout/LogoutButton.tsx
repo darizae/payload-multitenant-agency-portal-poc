@@ -1,24 +1,14 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { Button } from '@mui/material'
+import { useState } from 'react'
+import { PendingSubmitButton } from '@/components/form/PendingSubmitButton'
 
 export function LogoutButton() {
-  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   return (
-    <Button
-      variant="outlined"
-      onClick={async () => {
-        await fetch('/api/users/logout', {
-          method: 'POST',
-          credentials: 'include',
-        })
-        router.push('/login')
-        router.refresh()
-      }}
-    >
-      Log out
-    </Button>
+    <form action="/auth/logout" method="post" onSubmit={() => setIsSubmitting(true)}>
+      <PendingSubmitButton label="Log out" pendingLabel="Logging out…" pending={isSubmitting} variant="outlined" />
+    </form>
   )
 }

@@ -5,9 +5,10 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
 import { getPayloadClient } from '@/lib/payload'
 import { getId } from '@/lib/utils'
-import { canManageAgencyUsers, canManageCustomerUsers } from '@/lib/rules'
-import { getAssignedCustomerIdsForUser } from '@/lib/services/portal'
-import { isPlatformAdmin, isAgencyAdmin, isAgencyManager } from '@/lib/permissions'
+import { canManageAgencyUsers, canManageStoreUsers } from '@/lib/rules'
+import { getAssignedStoreIdsForUser } from '@/lib/services/portal'
+import { isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
+import { issueInvite } from '@/lib/invites'
 
 function text(formData: FormData, key: string): string {
   return String(formData.get(key) || '').trim()
@@ -24,13 +25,13 @@ async function getAgencyById(payload: any, agencyId: number) {
   return result.docs[0] || null
 }
 
-async function getCustomerById(payload: any, customerId: number) {
+async function getStoreById(payload: any, storeId: number) {
   const result = await payload.find({
-    collection: 'customers',
+    collection: 'stores',
     overrideAccess: true,
     depth: 1,
     limit: 1,
-    where: { id: { equals: customerId } },
+    where: { id: { equals: storeId } },
   })
   return result.docs[0] || null
 }
@@ -48,8 +49,8 @@ async function getUserById(payload: any, userId: number) {
 
 export async function createAgency(formData: FormData) {
   const actor = await requireUser()
-  if (!isPlatformAdmin(actor)) {
-    throw new Error('Only platform admins can create agencies.')
+  if (!isStoreheroRole(actor)) {
+    throw new Error('Only Storehero users can create agencies.')
   }
 
   const payload = await getPayloadClient() as any
@@ -78,16 +79,16 @@ export async function createAgencyUser(formData: FormData) {
 
   const payload = await getPayloadClient() as any
   const requestedAgencyId = getId(text(formData, 'agencyId'))
-  const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : getId(actor.agency)
+  const agencyId = isStoreheroRole(actor) ? requestedAgencyId : getId(actor.agency)
   if (typeof agencyId !== 'number') throw new Error('Agency is required.')
   if (!(await getAgencyById(payload, agencyId))) throw new Error('Agency was not found.')
 
   const role = text(formData, 'role')
-  if (!['agency-admin', 'agency-manager', 'agency-user'].includes(role)) {
+  if (!['agency-root', 'agency-member'].includes(role)) {
     throw new Error('Invalid agency role.')
   }
 
-  await payload.create({
+  const created = await payload.create({
     collection: 'users',
     overrideAccess: true,
     user: actor as any,
@@ -97,28 +98,35 @@ export async function createAgencyUser(formData: FormData) {
       role,
       status: 'invited',
       agency: agencyId,
-      hasGlobalCustomerAccess: formData.get('hasGlobalCustomerAccess') === 'on',
+      hasGlobalStoreAccess: formData.get('hasGlobalStoreAccess') === 'on',
     },
+  })
+
+  await issueInvite({
+    targetUserId: created.id,
+    email: created.email,
+    actor,
+    agency: agencyId,
   })
 
   revalidatePath(`/dashboard/agencies/${agencyId}`)
   redirect(`/dashboard/agencies/${agencyId}`)
 }
 
-export async function createCustomer(formData: FormData) {
+export async function createStore(formData: FormData) {
   const actor = await requireUser()
-  if (!(isPlatformAdmin(actor) || isAgencyAdmin(actor) || isAgencyManager(actor))) {
-    throw new Error('You do not have permission to create customers.')
+  if (!(isStoreheroRole(actor) || isAgencyRoot(actor))) {
+    throw new Error('You do not have permission to create stores.')
   }
 
   const payload = await getPayloadClient() as any
   const requestedAgencyId = getId(text(formData, 'agencyId'))
-  const agencyId = isPlatformAdmin(actor) ? requestedAgencyId : getId(actor.agency)
+  const agencyId = isStoreheroRole(actor) ? requestedAgencyId : getId(actor.agency)
   if (typeof agencyId !== 'number') throw new Error('Agency is required.')
   if (!(await getAgencyById(payload, agencyId))) throw new Error('Agency was not found.')
 
-  const customer = await payload.create({
-    collection: 'customers',
+  const store = await payload.create({
+    collection: 'stores',
     overrideAccess: true,
     user: actor as any,
     data: {
@@ -132,37 +140,37 @@ export async function createCustomer(formData: FormData) {
   })
 
   revalidatePath(`/dashboard/agencies/${agencyId}`)
-  redirect(`/dashboard/customers/${customer.id}`)
+  redirect(`/dashboard/stores/${store.id}`)
 }
 
-export async function createCustomerUser(formData: FormData) {
+export async function createStoreUser(formData: FormData) {
   const actor = await requireUser()
   const payload = await getPayloadClient() as any
-  const customerId = getId(text(formData, 'customerId'))
-  if (typeof customerId !== 'number') {
-    throw new Error('Customer is required.')
+  const storeId = getId(text(formData, 'storeId'))
+  if (typeof storeId !== 'number') {
+    throw new Error('Store is required.')
   }
-  const customer = await getCustomerById(payload, customerId)
-  if (!customer) {
-    throw new Error('Customer was not found.')
+  const store = await getStoreById(payload, storeId)
+  if (!store) {
+    throw new Error('Store was not found.')
   }
-  const assignedCustomerIds = await getAssignedCustomerIdsForUser(actor)
+  const assignedStoreIds = await getAssignedStoreIdsForUser(actor)
 
-  if (!canManageCustomerUsers({ user: actor, customer, assignedCustomerIds })) {
-    throw new Error('You do not have permission to create customer users here.')
+  if (!canManageStoreUsers({ user: actor, store, assignedStoreIds })) {
+    throw new Error('You do not have permission to create store users here.')
   }
 
   const role = text(formData, 'role')
-  if (!['customer-admin', 'customer-user'].includes(role)) {
-    throw new Error('Invalid customer role.')
+  if (!['store-root', 'store-member'].includes(role)) {
+    throw new Error('Invalid store role.')
   }
 
-  const customerAgencyId = getId(customer.agency)
-  if (typeof customerAgencyId !== 'number') {
-    throw new Error('Customer agency is invalid.')
+  const storeAgencyId = getId(store.agency)
+  if (typeof storeAgencyId !== 'number') {
+    throw new Error('Store agency is invalid.')
   }
 
-  await payload.create({
+  const created = await payload.create({
     collection: 'users',
     overrideAccess: true,
     user: actor as any,
@@ -171,72 +179,80 @@ export async function createCustomerUser(formData: FormData) {
       email: text(formData, 'email').toLowerCase(),
       role,
       status: 'invited',
-      agency: customerAgencyId,
-      customer: customer.id,
+      agency: storeAgencyId,
+      store: store.id,
     },
   })
 
-  revalidatePath(`/dashboard/customers/${customer.id}`)
-  redirect(`/dashboard/customers/${customer.id}`)
+  await issueInvite({
+    targetUserId: created.id,
+    email: created.email,
+    actor,
+    agency: storeAgencyId,
+    store: store.id,
+  })
+
+  revalidatePath(`/dashboard/stores/${store.id}`)
+  redirect(`/dashboard/stores/${store.id}`)
 }
 
 export async function createAssignment(formData: FormData) {
   const actor = await requireUser()
-  if (!(isPlatformAdmin(actor) || isAgencyAdmin(actor))) {
-    throw new Error('Only platform admins and agency admins can create assignments.')
+  if (!(isStoreheroRole(actor) || isAgencyRoot(actor))) {
+    throw new Error('Only Storehero and agency root users can create assignments.')
   }
 
   const payload = await getPayloadClient() as any
-  const customerId = getId(text(formData, 'customerId'))
-  if (typeof customerId !== 'number') {
-    throw new Error('Customer is required.')
+  const storeId = getId(text(formData, 'storeId'))
+  if (typeof storeId !== 'number') {
+    throw new Error('Store is required.')
   }
   const agencyUserId = getId(text(formData, 'agencyUserId'))
   if (typeof agencyUserId !== 'number') {
     throw new Error('Agency user is required.')
   }
-  const [customer, agencyUser] = await Promise.all([
-    getCustomerById(payload, customerId),
+  const [store, agencyUser] = await Promise.all([
+    getStoreById(payload, storeId),
     getUserById(payload, agencyUserId),
   ])
 
-  if (!customer) {
-    throw new Error('Customer was not found.')
+  if (!store) {
+    throw new Error('Store was not found.')
   }
   if (!agencyUser) {
     throw new Error('Agency user was not found.')
   }
-  if (agencyUser.role === 'customer-admin' || agencyUser.role === 'customer-user') {
-    throw new Error('Only agency-side users can be assigned to customers.')
+  if (agencyUser.role === 'store-root' || agencyUser.role === 'store-member') {
+    throw new Error('Only agency-side users can be assigned to stores.')
   }
 
-  const customerAgencyId = getId(customer.agency)
+  const storeAgencyId = getId(store.agency)
   const agencyUserAgencyId = getId(agencyUser.agency)
-  if (typeof customerAgencyId !== 'number' || typeof agencyUserAgencyId !== 'number' || customerAgencyId !== agencyUserAgencyId) {
-    throw new Error('Customer and agency user must belong to the same agency.')
+  if (typeof storeAgencyId !== 'number' || typeof agencyUserAgencyId !== 'number' || storeAgencyId !== agencyUserAgencyId) {
+    throw new Error('Store and agency user must belong to the same agency.')
   }
 
-  if (!isPlatformAdmin(actor) && getId(actor.agency) !== customerAgencyId) {
+  if (!isStoreheroRole(actor) && getId(actor.agency) !== storeAgencyId) {
     throw new Error('You do not have permission to assign users outside your agency.')
   }
 
   const assignedBy = getId(actor.id)
 
   await payload.create({
-    collection: 'agency-customer-assignments',
+    collection: 'agency-store-assignments',
     overrideAccess: true,
     user: actor as any,
     data: {
-      agency: customerAgencyId,
+      agency: storeAgencyId,
       agencyUser: agencyUserId,
-      customer: customer.id,
+      store: store.id,
       assignedBy: typeof assignedBy === 'number' ? assignedBy : undefined,
       status: 'active',
     },
   })
 
-  revalidatePath(`/dashboard/customers/${customer.id}`)
-  redirect(`/dashboard/customers/${customer.id}`)
+  revalidatePath(`/dashboard/stores/${store.id}`)
+  redirect(`/dashboard/stores/${store.id}`)
 }
 
 export async function activateInvite(formData: FormData) {

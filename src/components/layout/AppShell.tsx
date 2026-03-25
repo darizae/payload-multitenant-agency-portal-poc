@@ -3,18 +3,21 @@ import { AppBar, Box, Chip, Container, Stack, Toolbar, Typography } from '@mui/m
 import type { AppUserLike } from '@/lib/types'
 import { LogoutButton } from '@/components/layout/LogoutButton'
 import { LinkButton } from '@/components/mui/LinkButton'
+import { getId } from '@/lib/utils'
 
 export function AppShell({ user, children }: { user: AppUserLike; children: ReactNode }) {
+  const storeId = getId(user.store)
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar position="sticky" color="inherit" elevation={0} sx={{ borderBottom: '1px solid rgba(15,23,42,0.08)' }}>
         <Toolbar sx={{ gap: 2, minHeight: 72 }}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            Agency Portal POC
+            Storehero Agency Portal POC
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
             <LinkButton href="/dashboard">Dashboard</LinkButton>
             <LinkButton href="/dashboard/agencies">Agencies</LinkButton>
+            {storeId ? <LinkButton href={`/dashboard/stores/${storeId}`}>My store</LinkButton> : <LinkButton href="/dashboard/stores">Stores</LinkButton>}
             <Chip label={`${user.name || user.email} · ${user.role}`} color="primary" variant="outlined" />
             <LogoutButton />
           </Stack>

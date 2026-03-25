@@ -1,220 +1,306 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import config from '../payload.config'
 import { getPayload } from 'payload'
+import { issueInvite } from '@/lib/invites'
 
-async function upsertAgency(payload: any, name: string, data: Record<string, any>) {
-  const existing = await payload.find({ collection: 'agencies', overrideAccess: true, limit: 1, where: { name: { equals: name } } })
-  if (existing.totalDocs > 0) {
-    return payload.update({ collection: 'agencies', id: existing.docs[0].id, overrideAccess: true, data })
-  }
-  return payload.create({ collection: 'agencies', overrideAccess: true, data: { name, ...data } })
+type StoreSeed = {
+  name: string
 }
 
-async function upsertUser(payload: any, email: string, data: Record<string, any>) {
-  const existing = await payload.find({ collection: 'users', overrideAccess: true, limit: 1, where: { email: { equals: email } } })
-  if (existing.totalDocs > 0) {
-    return payload.update({ collection: 'users', id: existing.docs[0].id, overrideAccess: true, data })
-  }
-  return payload.create({ collection: 'users', overrideAccess: true, data: { email, ...data } })
+type AgencySeed = {
+  name: string
+  stores: StoreSeed[]
 }
 
-async function upsertCustomer(payload: any, agency: string | number, name: string, data: Record<string, any>) {
-  const existing = await payload.find({
-    collection: 'customers',
-    overrideAccess: true,
-    limit: 1,
-    where: {
-      and: [
-        { agency: { equals: agency } },
-        { name: { equals: name } },
-      ],
-    },
-  })
-
-  if (existing.totalDocs > 0) {
-    return payload.update({ collection: 'customers', id: existing.docs[0].id, overrideAccess: true, data: { agency, ...data } })
-  }
-
-  return payload.create({ collection: 'customers', overrideAccess: true, data: { agency, name, ...data } })
+type MetricsRow = {
+  agency_name: string
+  store_name: string
+  metric_date: string
+  source: string
+  net_sales: string | number
+  gross_profit: string | number
+  marketing_ad_spend: string | number
+  mer: string | number
 }
 
-async function ensureAssignment(payload: any, agency: string | number, agencyUser: string | number, customer: string | number, assignedBy: string | number) {
-  const existing = await payload.find({
-    collection: 'agency-customer-assignments',
-    overrideAccess: true,
-    limit: 1,
-    where: {
-      and: [
-        { agencyUser: { equals: agencyUser } },
-        { customer: { equals: customer } },
-      ],
-    },
-  })
+const AGENCY_SEED: AgencySeed[] = [
+  {
+    name: 'Aurora Agency',
+    stores: [
+      { name: 'Aurora Bikes' },
+      { name: 'Aurora Coffee' },
+      { name: 'Aurora Fitness' },
+      { name: 'Aurora Pets' },
+      { name: 'Aurora Apparel' },
+    ],
+  },
+  {
+    name: 'Beacon Agency',
+    stores: [
+      { name: 'Beacon Home' },
+      { name: 'Beacon Outdoor' },
+      { name: 'Beacon Grooming' },
+      { name: 'Beacon Snacks' },
+      { name: 'Beacon Supplements' },
+    ],
+  },
+  {
+    name: 'Catalyst Agency',
+    stores: [
+      { name: 'Catalyst Beauty' },
+      { name: 'Catalyst Tech' },
+      { name: 'Catalyst Wellness' },
+      { name: 'Catalyst Kids' },
+      { name: 'Catalyst Studio' },
+    ],
+  },
+]
 
-  if (existing.totalDocs > 0) {
-    return payload.update({
-      collection: 'agency-customer-assignments',
-      id: existing.docs[0].id,
-      overrideAccess: true,
-      data: { agency, agencyUser, customer, assignedBy, status: 'active' },
-    })
+const PARQUET_PATH = path.resolve(process.cwd(), 'data/fixtures/shopify_metrics_daily.parquet')
+const DEMO_PASSWORD = 'Passw0rd!Demo'
+
+function toNumber(value: string | number): number {
+  if (typeof value === 'number') return value
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+async function ensureDatabaseIsEmpty(payload: any) {
+  const agencies = await payload.count({ collection: 'agencies', overrideAccess: true })
+  if (agencies.totalDocs > 0) {
+    throw new Error('Database is not empty. Run `npm run db:reseed` to reset and reseed.')
+  }
+}
+
+async function loadParquetRows(): Promise<MetricsRow[]> {
+  if (!fs.existsSync(PARQUET_PATH)) {
+    throw new Error(`Parquet fixture not found at ${PARQUET_PATH}. Run python3 scripts/data/generate_shopify_metrics_parquet.py`)
   }
 
-  return payload.create({
-    collection: 'agency-customer-assignments',
-    overrideAccess: true,
-    data: { agency, agencyUser, customer, assignedBy, status: 'active' },
-  })
+  const parquetModule = await import('parquetjs-lite')
+  const parquet = parquetModule.default
+  const reader = await parquet.ParquetReader.openFile(PARQUET_PATH)
+  const cursor = reader.getCursor()
+  const rows: MetricsRow[] = []
+
+  while (true) {
+    const row = await cursor.next()
+    if (!row) break
+    rows.push(row as MetricsRow)
+  }
+
+  await reader.close()
+  return rows
 }
 
 async function main() {
-  const payload = await getPayload({ config })
-  console.log('Seeding demo data...')
+  const payload = await getPayload({ config }) as any
+  console.log('Seeding Postgres demo data...')
+  await ensureDatabaseIsEmpty(payload)
 
-  const alphaAgency = await upsertAgency(payload, 'Alpha Agency', {
-    status: 'active',
-    primaryContactName: 'Alice Agency',
-    primaryContactEmail: 'contact@alpha-agency.local',
-    primaryContactPhone: '+49 555 000 100',
+  const storeheroRoot = await payload.create({
+    collection: 'users',
+    overrideAccess: true,
+    data: {
+      name: 'Storehero Root',
+      email: process.env.SEED_STOREHERO_ROOT_EMAIL || 'storehero.root@poc.local',
+      password: process.env.SEED_STOREHERO_ROOT_PASSWORD || DEMO_PASSWORD,
+      role: 'storehero-root',
+      status: 'active',
+    },
   })
 
-  const betaAgency = await upsertAgency(payload, 'Beta Agency', {
-    status: 'active',
-    primaryContactName: 'Ben Beta',
-    primaryContactEmail: 'contact@beta-agency.local',
-    primaryContactPhone: '+49 555 000 200',
+  const storeheroMember = await payload.create({
+    collection: 'users',
+    overrideAccess: true,
+    data: {
+      name: 'Storehero Member',
+      email: 'storehero.member@poc.local',
+      password: DEMO_PASSWORD,
+      role: 'storehero-member',
+      status: 'active',
+    },
   })
 
-  const platformAdmin = await upsertUser(payload, process.env.SEED_PLATFORM_ADMIN_EMAIL || 'platform.admin@poc.local', {
-    name: 'Platform Admin',
-    password: process.env.SEED_PLATFORM_ADMIN_PASSWORD || 'Passw0rd!Demo',
-    role: 'platform-admin',
-    status: 'active',
-    agency: null,
-    customer: null,
-  })
+  const agencyByName = new Map<string, any>()
+  const agencyRootByAgencyId = new Map<number, any>()
+  const agencyMemberByAgencyId = new Map<number, any>()
+  const storeByComposite = new Map<string, any>()
 
-  const alphaAdmin = await upsertUser(payload, process.env.SEED_AGENCY_ADMIN_EMAIL || 'alpha.admin@poc.local', {
-    name: 'Alpha Admin',
-    password: process.env.SEED_AGENCY_ADMIN_PASSWORD || 'Passw0rd!Demo',
-    role: 'agency-admin',
-    status: 'active',
-    agency: alphaAgency.id,
-    customer: null,
-    hasGlobalCustomerAccess: true,
-  })
+  for (const agencySeed of AGENCY_SEED) {
+    const agency = await payload.create({
+      collection: 'agencies',
+      overrideAccess: true,
+      data: {
+        name: agencySeed.name,
+        status: 'active',
+        primaryContactName: `${agencySeed.name} Contact`,
+        primaryContactEmail: `${agencySeed.name.toLowerCase().replace(/\s+/g, '.')}@poc.local`,
+        primaryContactPhone: '+1-555-0100',
+      },
+      user: storeheroRoot,
+    })
+    agencyByName.set(agencySeed.name, agency)
 
-  const alphaManager = await upsertUser(payload, 'alpha.manager@poc.local', {
-    name: 'Alpha Manager',
-    password: 'Passw0rd!Demo',
-    role: 'agency-manager',
-    status: 'active',
-    agency: alphaAgency.id,
-    customer: null,
-    hasGlobalCustomerAccess: true,
-  })
+    const agencyRoot = await payload.create({
+      collection: 'users',
+      overrideAccess: true,
+      data: {
+        name: `${agencySeed.name} Root`,
+        email: `${agencySeed.name.toLowerCase().replace(/\s+/g, '.')}+root@poc.local`,
+        password: DEMO_PASSWORD,
+        role: 'agency-root',
+        status: 'active',
+        agency: agency.id,
+      },
+      user: storeheroRoot,
+    })
 
-  const alphaUser = await upsertUser(payload, 'alpha.user@poc.local', {
-    name: 'Alpha Specialist',
-    password: 'Passw0rd!Demo',
-    role: 'agency-user',
-    status: 'active',
-    agency: alphaAgency.id,
-    customer: null,
-    hasGlobalCustomerAccess: false,
-  })
+    const agencyMember = await payload.create({
+      collection: 'users',
+      overrideAccess: true,
+      data: {
+        name: `${agencySeed.name} Member`,
+        email: `${agencySeed.name.toLowerCase().replace(/\s+/g, '.')}+member@poc.local`,
+        password: DEMO_PASSWORD,
+        role: 'agency-member',
+        status: 'active',
+        agency: agency.id,
+        hasGlobalStoreAccess: false,
+      },
+      user: agencyRoot,
+    })
 
-  await upsertUser(payload, 'beta.admin@poc.local', {
-    name: 'Beta Admin',
-    password: 'Passw0rd!Demo',
-    role: 'agency-admin',
-    status: 'active',
-    agency: betaAgency.id,
-    customer: null,
-    hasGlobalCustomerAccess: true,
-  })
+    agencyRootByAgencyId.set(agency.id, agencyRoot)
+    agencyMemberByAgencyId.set(agency.id, agencyMember)
 
-  const storeOne = await upsertCustomer(payload, alphaAgency.id, 'Northwind Bikes', {
-    status: 'active',
-    contactName: 'Nora Northwind',
-    contactEmail: 'owner@northwind-bikes.local',
-    contactPhone: '+49 555 111 000',
-  })
+    for (let index = 0; index < agencySeed.stores.length; index += 1) {
+      const storeSeed = agencySeed.stores[index]
+      const store = await payload.create({
+        collection: 'stores',
+        overrideAccess: true,
+        data: {
+          agency: agency.id,
+          name: storeSeed.name,
+          status: 'active',
+          contactName: `${storeSeed.name} Owner`,
+          contactEmail: `${storeSeed.name.toLowerCase().replace(/\s+/g, '.')}@poc.local`,
+          contactPhone: '+1-555-2000',
+        },
+        user: agencyRoot,
+      })
+      storeByComposite.set(`${agencySeed.name}::${storeSeed.name}`, store)
 
-  const storeTwo = await upsertCustomer(payload, alphaAgency.id, 'Summit Coffee', {
-    status: 'active',
-    contactName: 'Sam Summit',
-    contactEmail: 'owner@summit-coffee.local',
-    contactPhone: '+49 555 111 001',
-  })
+      const createdStoreMember = await payload.create({
+        collection: 'users',
+        overrideAccess: true,
+        data: {
+          name: `${storeSeed.name} Root`,
+          email: `${storeSeed.name.toLowerCase().replace(/\s+/g, '.')}+root@poc.local`,
+          password: DEMO_PASSWORD,
+          role: 'store-root',
+          status: 'active',
+          agency: agency.id,
+          store: store.id,
+        },
+        user: agencyRoot,
+      })
 
-  const betaCustomer = await upsertCustomer(payload, betaAgency.id, 'Orbit Fitness', {
-    status: 'active',
-    contactName: 'Olivia Orbit',
-    contactEmail: 'owner@orbit-fitness.local',
-    contactPhone: '+49 555 222 000',
-  })
+      const storeMemberStatus = agencySeed.name === 'Aurora Agency' && index === 0 ? 'invited' : 'active'
 
-  const northwindAdmin = await upsertUser(payload, 'store1.admin@poc.local', {
-    name: 'Northwind Admin',
-    password: 'Passw0rd!Demo',
-    role: 'customer-admin',
-    status: 'active',
-    agency: alphaAgency.id,
-    customer: storeOne.id,
-  })
+      await payload.create({
+        collection: 'users',
+        overrideAccess: true,
+        data: {
+          name: `${storeSeed.name} Member`,
+          email: `${storeSeed.name.toLowerCase().replace(/\s+/g, '.')}+member@poc.local`,
+          password: DEMO_PASSWORD,
+          role: 'store-member',
+          status: storeMemberStatus,
+          agency: agency.id,
+          store: store.id,
+        },
+        user: agencyRoot,
+      })
 
-  const northwindUser = await upsertUser(payload, 'store1.user@poc.local', {
-    name: 'Northwind Staff',
-    password: 'Passw0rd!Demo',
-    role: 'customer-user',
-    status: 'active',
-    agency: alphaAgency.id,
-    customer: storeOne.id,
-  })
+      if (storeMemberStatus === 'invited') {
+        await issueInvite({
+          targetUserId: createdStoreMember.id,
+          email: createdStoreMember.email,
+          actor: agencyRoot,
+          agency: agency.id,
+          store: store.id,
+        })
+      }
+    }
+  }
 
-  await upsertUser(payload, 'store2.admin@poc.local', {
-    name: 'Summit Admin',
-    password: 'Passw0rd!Demo',
-    role: 'customer-admin',
-    status: 'active',
-    agency: alphaAgency.id,
-    customer: storeTwo.id,
-  })
+  for (const agencySeed of AGENCY_SEED) {
+    const agency = agencyByName.get(agencySeed.name)
+    const agencyRoot = agencyRootByAgencyId.get(agency.id)
+    const agencyMember = agencyMemberByAgencyId.get(agency.id)
 
-  await upsertUser(payload, 'orbit.admin@poc.local', {
-    name: 'Orbit Admin',
-    password: 'Passw0rd!Demo',
-    role: 'customer-admin',
-    status: 'active',
-    agency: betaAgency.id,
-    customer: betaCustomer.id,
-  })
+    for (let index = 0; index < agencySeed.stores.length; index += 1) {
+      if (index >= 3) break
+      const store = storeByComposite.get(`${agencySeed.name}::${agencySeed.stores[index].name}`)
+      await payload.create({
+        collection: 'agency-store-assignments',
+        overrideAccess: true,
+        data: {
+          agency: agency.id,
+          agencyUser: agencyMember.id,
+          store: store.id,
+          assignedBy: agencyRoot.id,
+          status: 'active',
+        },
+        user: agencyRoot,
+      })
+    }
+  }
 
-  await upsertUser(payload, 'pending.invite@poc.local', {
-    name: 'Pending Invite Demo',
-    role: 'customer-user',
-    status: 'invited',
-    agency: alphaAgency.id,
-    customer: storeOne.id,
-  })
+  const metricRows = await loadParquetRows()
+  for (let index = 0; index < metricRows.length; index += 1) {
+    const row = metricRows[index]
+    const agency = agencyByName.get(row.agency_name)
+    const store = storeByComposite.get(`${row.agency_name}::${row.store_name}`)
+    if (!agency || !store) {
+      continue
+    }
 
-  await ensureAssignment(payload, alphaAgency.id, alphaUser.id, storeOne.id, alphaAdmin.id)
-  await ensureAssignment(payload, alphaAgency.id, alphaManager.id, storeOne.id, alphaAdmin.id)
-  await ensureAssignment(payload, alphaAgency.id, alphaManager.id, storeTwo.id, alphaAdmin.id)
+    await payload.create({
+      collection: 'store-daily-metrics',
+      overrideAccess: true,
+      data: {
+        tenant: agency.id,
+        store: store.id,
+        source: 'shopify',
+        metricDate: row.metric_date,
+        netSales: toNumber(row.net_sales),
+        grossProfit: toNumber(row.gross_profit),
+        marketingAdSpend: toNumber(row.marketing_ad_spend),
+        mer: toNumber(row.mer),
+      },
+      user: storeheroMember,
+    })
+
+    if ((index + 1) % 1000 === 0) {
+      console.log(`Inserted ${index + 1}/${metricRows.length} metric rows...`)
+    }
+  }
 
   const counts = {
     agencies: (await payload.count({ collection: 'agencies', overrideAccess: true })).totalDocs,
-    customers: (await payload.count({ collection: 'customers', overrideAccess: true })).totalDocs,
+    stores: (await payload.count({ collection: 'stores', overrideAccess: true })).totalDocs,
     users: (await payload.count({ collection: 'users', overrideAccess: true })).totalDocs,
-    assignments: (await payload.count({ collection: 'agency-customer-assignments', overrideAccess: true })).totalDocs,
+    assignments: (await payload.count({ collection: 'agency-store-assignments', overrideAccess: true })).totalDocs,
+    metrics: (await payload.count({ collection: 'store-daily-metrics', overrideAccess: true })).totalDocs,
   }
 
   console.log('Seed complete', counts)
-  console.log('Platform admin:', platformAdmin.email)
-  console.log('Agency admin:', alphaAdmin.email)
-  console.log('Customer admin:', northwindAdmin.email)
-  console.log('Customer user:', northwindUser.email)
-  console.log('All seeded passwords use: Passw0rd!Demo')
+  console.log('Storehero root:', storeheroRoot.email)
+  console.log('Storehero member:', storeheroMember.email)
+  console.log('All seeded passwords use:', DEMO_PASSWORD)
 }
 
 main().catch((error) => {

@@ -1,41 +1,48 @@
 import { notFound } from 'next/navigation'
 import { Box, Button, Card, CardContent, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
-import { getCustomerPageData } from '@/lib/services/portal'
-import { createAssignment, createCustomerUser } from '@/lib/actions/portal'
-import { getAssignedCustomerIdsForUser } from '@/lib/services/portal'
-import { canManageCustomerUsers } from '@/lib/rules'
-import { isPlatformAdmin, isAgencyAdmin } from '@/lib/permissions'
+import { getStorePageData } from '@/lib/services/portal'
+import { createAssignment, createStoreUser } from '@/lib/actions/portal'
+import { getAssignedStoreIdsForUser } from '@/lib/services/portal'
+import { canManageStoreUsers } from '@/lib/rules'
+import { isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
+import { AnalyticsPanel } from '@/components/dashboard/AnalyticsPanel'
 
-export default async function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
+export default async function StoreDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ storeId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const user = await requireUser()
-  const { customerId } = await params
-  const [data, assignedCustomerIds] = await Promise.all([
-    getCustomerPageData(user, customerId),
-    getAssignedCustomerIdsForUser(user),
+  const { storeId } = await params
+  const [data, assignedStoreIds] = await Promise.all([
+    getStorePageData(user, storeId),
+    getAssignedStoreIdsForUser(user),
   ])
   if (!data) notFound()
 
-  const canCreateUsers = canManageCustomerUsers({ user, customer: data.customer, assignedCustomerIds })
-  const canAssign = isPlatformAdmin(user) || isAgencyAdmin(user)
+  const canCreateUsers = canManageStoreUsers({ user, store: data.store, assignedStoreIds })
+  const canAssign = isStoreheroRole(user) || isAgencyRoot(user)
 
   return (
     <Stack spacing={3}>
       <div>
-        <Typography variant="h4">{data.customer.name}</Typography>
-        <Typography color="text.secondary">Customer-scoped workspace with user management and agency-user assignments.</Typography>
+        <Typography variant="h4">{data.store.name}</Typography>
+        <Typography color="text.secondary">Store-scoped workspace with user management, agency-user assignments, and analytics.</Typography>
       </div>
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Customer overview</Typography>
+              <Typography variant="h6" gutterBottom>Store overview</Typography>
               <Stack spacing={1}>
-                <Typography>Status: {data.customer.status}</Typography>
-                <Typography>Agency: {(data.customer.agency as any)?.name || data.customer.agency}</Typography>
-                <Typography>Contact: {data.customer.contactName || '—'}</Typography>
-                <Typography>Email: {data.customer.contactEmail || '—'}</Typography>
+                <Typography>Status: {data.store.status}</Typography>
+                <Typography>Agency: {(data.store.agency as any)?.name || data.store.agency}</Typography>
+                <Typography>Contact: {data.store.contactName || '—'}</Typography>
+                <Typography>Email: {data.store.contactEmail || '—'}</Typography>
               </Stack>
             </CardContent>
           </Card>
@@ -45,7 +52,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <CardContent>
               <Typography variant="h6" gutterBottom>Counts</Typography>
               <Stack spacing={1}>
-                <Typography>Customer users: {data.customerUsers.length}</Typography>
+                <Typography>Store users: {data.storeUsers.length}</Typography>
                 <Typography>Assigned agency users: {data.assignments.length}</Typography>
                 <Typography>Outstanding invites: {data.invites.filter((invite: any) => invite.status === 'pending').length}</Typography>
               </Stack>
@@ -57,20 +64,20 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       {canCreateUsers ? (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Invite customer user</Typography>
-            <Stack component="form" action={createCustomerUser} spacing={2}>
-              <input type="hidden" name="customerId" value={customerId} />
+            <Typography variant="h6" gutterBottom>Invite store user</Typography>
+            <Stack component="form" action={createStoreUser} spacing={2}>
+              <input type="hidden" name="storeId" value={storeId} />
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: 4 }}><TextField name="name" label="Name" required /></Grid>
                 <Grid size={{ xs: 12, md: 4 }}><TextField name="email" label="Email" type="email" required /></Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField name="role" label="Role" select defaultValue="customer-user">
-                    <MenuItem value="customer-admin">customer-admin</MenuItem>
-                    <MenuItem value="customer-user">customer-user</MenuItem>
+                  <TextField name="role" label="Role" select defaultValue="store-member">
+                    <MenuItem value="store-root">store-root</MenuItem>
+                    <MenuItem value="store-member">store-member</MenuItem>
                   </TextField>
                 </Grid>
               </Grid>
-              <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Invite customer user</Button></Stack>
+              <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Invite store user</Button></Stack>
             </Stack>
           </CardContent>
         </Card>
@@ -81,7 +88,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <CardContent>
             <Typography variant="h6" gutterBottom>Assign agency user</Typography>
             <Stack component="form" action={createAssignment} spacing={2}>
-              <input type="hidden" name="customerId" value={customerId} />
+              <input type="hidden" name="storeId" value={storeId} />
               <TextField name="agencyUserId" label="Agency user" select defaultValue="" required>
                 {data.agencyUsers.map((agencyUser: any) => (
                   <MenuItem key={agencyUser.id} value={agencyUser.id}>{agencyUser.name} · {agencyUser.role}</MenuItem>
@@ -97,9 +104,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Customer users</Typography>
+              <Typography variant="h6" gutterBottom>Store users</Typography>
               <Stack spacing={1.5}>
-                {data.customerUsers.map((portalUser: any) => (
+                {data.storeUsers.map((portalUser: any) => (
                   <Box key={portalUser.id} sx={{ p: 2, border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
                     <Typography fontWeight={700}>{portalUser.name}</Typography>
                     <Typography color="text.secondary">{portalUser.email}</Typography>
@@ -142,6 +149,15 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           </Stack>
         </CardContent>
       </Card>
+
+      <AnalyticsPanel
+        user={user}
+        searchParams={searchParams}
+        title="Store Analytics"
+        description="Store-scoped Shopify metrics grouped by selected granularity."
+        basePath={`/dashboard/stores/${storeId}`}
+        forcedStoreId={Number(storeId)}
+      />
     </Stack>
   )
 }

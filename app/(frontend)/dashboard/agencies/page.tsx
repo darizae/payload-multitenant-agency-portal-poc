@@ -2,7 +2,7 @@ import { Button, Card, CardContent, Grid, Stack, TextField, Typography } from '@
 import { requireUser } from '@/lib/auth'
 import { getVisibleAgencies } from '@/lib/services/portal'
 import { createAgency } from '@/lib/actions/portal'
-import { isPlatformAdmin } from '@/lib/permissions'
+import { isStoreheroRole } from '@/lib/permissions'
 import { LinkButton } from '@/components/mui/LinkButton'
 
 export default async function AgenciesPage() {
@@ -13,10 +13,10 @@ export default async function AgenciesPage() {
     <Stack spacing={3}>
       <div>
         <Typography variant="h4">Agencies</Typography>
-        <Typography color="text.secondary">Top-level tenants. Platform admins can create new agencies here.</Typography>
+        <Typography color="text.secondary">Top-level tenants. Storehero users can create and manage agencies.</Typography>
       </div>
 
-      {isPlatformAdmin(user) ? (
+      {isStoreheroRole(user) ? (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Create agency</Typography>

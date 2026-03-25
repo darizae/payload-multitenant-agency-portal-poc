@@ -1,8 +1,15 @@
 import type { ReactNode } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { requireUser } from '@/lib/auth'
+import { getAgencyBrandingForUser } from '@/lib/services/portal'
+import { TenantThemeProvider } from '@/components/mui/TenantThemeProvider'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const user = await requireUser()
-  return <AppShell user={user}>{children}</AppShell>
+  const branding = await getAgencyBrandingForUser(user)
+  return (
+    <TenantThemeProvider branding={branding}>
+      <AppShell user={user}>{children}</AppShell>
+    </TenantThemeProvider>
+  )
 }

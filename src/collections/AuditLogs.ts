@@ -20,7 +20,7 @@ export const AuditLogs: CollectionConfig = {
     { name: 'entityType', type: 'text', required: true },
     { name: 'entityId', type: 'text' },
     { name: 'agency', type: 'relationship', relationTo: 'agencies' },
-    { name: 'customer', type: 'relationship', relationTo: 'customers' },
+    { name: 'store', type: 'relationship', relationTo: 'stores' },
     { name: 'summary', type: 'textarea', required: true },
     { name: 'metadata', type: 'json' },
   ],

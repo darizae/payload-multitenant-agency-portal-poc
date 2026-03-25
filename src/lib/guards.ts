@@ -1,6 +1,6 @@
 import { APIError } from 'payload'
-import { assertLastAgencyAdminProtection, assertLastCustomerAdminProtection, assertNoAgencyTransfer, validateUserShape } from '@/lib/rules'
-import { isAgencyAdmin, isAgencyManager, isCustomerAdmin, isPlatformAdmin } from '@/lib/permissions'
+import { assertLastAgencyRootProtection, assertLastStoreRootProtection, assertNoAgencyTransfer, validateUserShape } from '@/lib/rules'
+import { isAgencyMember, isAgencyRoot, isStoreRoot, isStoreheroMember, isStoreheroRoot, isStoreheroRole } from '@/lib/permissions'
 import type { AppUserLike } from '@/lib/types'
 import { getId } from '@/lib/utils'
 
@@ -21,39 +21,39 @@ export async function validateUserBusinessRules(args: {
   }
 
   const agencyId = getId(draft.agency)
-  const customerId = getId(draft.customer)
+  const storeId = getId(draft.store)
 
-  if (customerId) {
-    const customer = await payload.findByID({
-      collection: 'customers',
-      id: customerId,
+  if (storeId) {
+    const store = await payload.findByID({
+      collection: 'stores',
+      id: storeId,
       depth: 0,
       overrideAccess: true,
     })
 
-    const customerAgencyId = getId(customer?.agency)
-    if (!customerAgencyId || (agencyId && String(customerAgencyId) != String(agencyId))) {
-      throw new APIError('Customer users must reference the same parent agency as their customer.', 400)
+    const storeAgencyId = getId(store?.agency)
+    if (!storeAgencyId || (agencyId && String(storeAgencyId) !== String(agencyId))) {
+      throw new APIError('Store users must reference the same parent agency as their store.', 400)
     }
 
-    draft.agency = customerAgencyId
+    draft.agency = storeAgencyId
   }
 
-  if (originalDoc?.id && originalDoc.role === 'agency-admin' && originalDoc.agency) {
+  if (originalDoc?.id && originalDoc.role === 'agency-root' && originalDoc.agency) {
     const count = await payload.count({
       collection: 'users',
       overrideAccess: true,
       where: {
         and: [
           { agency: { equals: getId(originalDoc.agency) } },
-          { role: { equals: 'agency-admin' } },
+          { role: { equals: 'agency-root' } },
           { status: { equals: 'active' } },
         ],
       },
     })
 
-    const error = assertLastAgencyAdminProtection({
-      activeAgencyAdminCount: count.totalDocs,
+    const error = assertLastAgencyRootProtection({
+      activeAgencyRootCount: count.totalDocs,
       originalRole: originalDoc.role,
       nextRole: draft.role,
       originalStatus: originalDoc.status,
@@ -63,21 +63,21 @@ export async function validateUserBusinessRules(args: {
     if (error) throw new APIError(error, 400)
   }
 
-  if (originalDoc?.id && originalDoc.role === 'customer-admin' && originalDoc.customer) {
+  if (originalDoc?.id && originalDoc.role === 'store-root' && originalDoc.store) {
     const count = await payload.count({
       collection: 'users',
       overrideAccess: true,
       where: {
         and: [
-          { customer: { equals: getId(originalDoc.customer) } },
-          { role: { equals: 'customer-admin' } },
+          { store: { equals: getId(originalDoc.store) } },
+          { role: { equals: 'store-root' } },
           { status: { equals: 'active' } },
         ],
       },
     })
 
-    const error = assertLastCustomerAdminProtection({
-      activeCustomerAdminCount: count.totalDocs,
+    const error = assertLastStoreRootProtection({
+      activeStoreRootCount: count.totalDocs,
       originalRole: originalDoc.role,
       nextRole: draft.role,
       originalStatus: originalDoc.status,
@@ -98,53 +98,66 @@ export function validateUserWritePermissions(args: {
 }) {
   const { actor, originalDoc, nextData, operation } = args
   if (!actor) return
-  if (isPlatformAdmin(actor)) return
+  if (isStoreheroRoot(actor)) return
 
   const draft = {
     ...originalDoc,
     ...nextData,
   }
+
   const actorId = getId(actor.id)
   const actorAgencyId = getId(actor.agency)
-  const actorCustomerId = getId(actor.customer)
+  const actorStoreId = getId(actor.store)
   const draftAgencyId = getId(draft.agency)
-  const draftCustomerId = getId(draft.customer)
+  const draftStoreId = getId(draft.store)
+  const draftRole = String(draft.role || '')
+  const originalRole = String(originalDoc?.role || '')
 
-  if (isAgencyAdmin(actor)) {
-    if (!actorAgencyId || !draftAgencyId || String(actorAgencyId) !== String(draftAgencyId)) {
-      throw new APIError('Agency admins can only manage users in their own agency.', 403)
-    }
-    if (draft.role === 'platform-admin' || originalDoc?.role === 'platform-admin') {
-      throw new APIError('Agency admins cannot create or edit platform admins.', 403)
+  if (isStoreheroMember(actor)) {
+    if (draftRole.startsWith('storehero-') || originalRole.startsWith('storehero-')) {
+      throw new APIError('Storehero members cannot manage Storehero root/member accounts.', 403)
     }
     return
   }
 
-  if (isCustomerAdmin(actor)) {
-    if (operation === 'create' && !draftCustomerId) {
-      throw new APIError('Customer admins can only create users for their own customer.', 403)
+  if (isAgencyRoot(actor)) {
+    if (!actorAgencyId || !draftAgencyId || String(actorAgencyId) !== String(draftAgencyId)) {
+      throw new APIError('Agency root users can only manage users in their own agency.', 403)
     }
-    if (!actorCustomerId || !draftCustomerId || String(actorCustomerId) !== String(draftCustomerId)) {
-      throw new APIError('Customer admins can only manage users in their own customer.', 403)
+    if (draftRole.startsWith('storehero-') || originalRole.startsWith('storehero-')) {
+      throw new APIError('Agency root users cannot create or edit Storehero accounts.', 403)
+    }
+    return
+  }
+
+  if (isStoreRoot(actor)) {
+    if (operation === 'create' && !draftStoreId) {
+      throw new APIError('Store root users can only create users for their own store.', 403)
+    }
+    if (!actorStoreId || !draftStoreId || String(actorStoreId) !== String(draftStoreId)) {
+      throw new APIError('Store root users can only manage users in their own store.', 403)
     }
     if (actorAgencyId && draftAgencyId && String(actorAgencyId) !== String(draftAgencyId)) {
-      throw new APIError('Customer admins can only manage users in their own agency.', 403)
+      throw new APIError('Store root users can only manage users in their own agency.', 403)
     }
-    if (!['customer-admin', 'customer-user'].includes(String(draft.role || ''))) {
-      throw new APIError('Customer admins can only manage customer roles.', 403)
+    if (!['store-root', 'store-member'].includes(draftRole)) {
+      throw new APIError('Store root users can only manage store roles.', 403)
     }
     return
   }
 
-  if ((isAgencyManager(actor) || actor.role === 'agency-user') && operation === 'create') {
+  if ((isAgencyMember(actor) || actor.role === 'store-member') && operation === 'create') {
+    if (actor.role === 'store-member') {
+      throw new APIError('Store members cannot create users.', 403)
+    }
     if (!actorAgencyId || !draftAgencyId || String(actorAgencyId) !== String(draftAgencyId)) {
-      throw new APIError('Agency users can only create customer users in their own agency.', 403)
+      throw new APIError('Agency members can only create store users in their own agency.', 403)
     }
-    if (!draftCustomerId) {
-      throw new APIError('Customer users must be created inside a customer workspace.', 403)
+    if (!draftStoreId) {
+      throw new APIError('Store users must be created inside a store workspace.', 403)
     }
-    if (!['customer-admin', 'customer-user'].includes(String(draft.role || ''))) {
-      throw new APIError('Agency users can only create customer user roles.', 403)
+    if (!['store-root', 'store-member'].includes(draftRole)) {
+      throw new APIError('Agency members can only create store user roles.', 403)
     }
     return
   }
@@ -170,26 +183,34 @@ export function validateUserDeletePermissions(args: {
 }) {
   const { actor, targetDoc } = args
   if (!actor || !targetDoc) return
-  if (isPlatformAdmin(actor)) return
+  if (isStoreheroRoot(actor)) return
 
   const actorAgencyId = getId(actor.agency)
   const targetAgencyId = getId(targetDoc.agency)
-  const actorCustomerId = getId(actor.customer)
-  const targetCustomerId = getId(targetDoc.customer)
+  const actorStoreId = getId(actor.store)
+  const targetStoreId = getId(targetDoc.store)
+  const targetRole = String(targetDoc.role || '')
 
-  if (isAgencyAdmin(actor)) {
-    if (!actorAgencyId || !targetAgencyId || String(actorAgencyId) !== String(targetAgencyId) || targetDoc.role === 'platform-admin') {
-      throw new APIError('Agency admins can only delete users in their own agency.', 403)
+  if (isStoreheroMember(actor)) {
+    if (targetRole.startsWith('storehero-')) {
+      throw new APIError('Storehero members cannot delete Storehero root/member accounts.', 403)
     }
     return
   }
 
-  if (isCustomerAdmin(actor)) {
-    if (!actorCustomerId || !targetCustomerId || String(actorCustomerId) !== String(targetCustomerId)) {
-      throw new APIError('Customer admins can only delete users in their own customer.', 403)
+  if (isAgencyRoot(actor)) {
+    if (!actorAgencyId || !targetAgencyId || String(actorAgencyId) !== String(targetAgencyId) || targetRole.startsWith('storehero-')) {
+      throw new APIError('Agency root users can only delete users in their own agency.', 403)
     }
-    if (!['customer-admin', 'customer-user'].includes(String(targetDoc.role || ''))) {
-      throw new APIError('Customer admins can only delete customer users.', 403)
+    return
+  }
+
+  if (isStoreRoot(actor)) {
+    if (!actorStoreId || !targetStoreId || String(actorStoreId) !== String(targetStoreId)) {
+      throw new APIError('Store root users can only delete users in their own store.', 403)
+    }
+    if (!['store-root', 'store-member'].includes(targetRole)) {
+      throw new APIError('Store root users can only delete store users.', 403)
     }
     return
   }
@@ -197,7 +218,7 @@ export function validateUserDeletePermissions(args: {
   throw new APIError('You do not have permission to delete this user.', 403)
 }
 
-export async function validateCustomerBusinessRules(args: {
+export async function validateStoreBusinessRules(args: {
   originalDoc?: any
   nextData: Record<string, any>
 }) {
@@ -213,7 +234,7 @@ export async function validateCustomerBusinessRules(args: {
   }
 }
 
-export function validateCustomerWritePermissions(args: {
+export function validateStoreWritePermissions(args: {
   actor?: AppUserLike | null
   originalDoc?: any
   nextData: Record<string, any>
@@ -221,49 +242,49 @@ export function validateCustomerWritePermissions(args: {
 }) {
   const { actor, originalDoc, nextData, operation } = args
   if (!actor) return
-  if (isPlatformAdmin(actor)) return
+  if (isStoreheroRole(actor)) return
 
   const actorAgencyId = getId(actor.agency)
   const nextAgencyId = getId(nextData?.agency ?? originalDoc?.agency)
-  const originalCustomerId = getId(originalDoc?.id)
-  const actorCustomerId = getId(actor.customer)
+  const originalStoreId = getId(originalDoc?.id)
+  const actorStoreId = getId(actor.store)
 
-  if (isAgencyAdmin(actor) || isAgencyManager(actor)) {
+  if (isAgencyRoot(actor) || isAgencyMember(actor)) {
     if (!actorAgencyId || !nextAgencyId || String(actorAgencyId) !== String(nextAgencyId)) {
-      throw new APIError('Agency users can only manage customers in their own agency.', 403)
+      throw new APIError('Agency users can only manage stores in their own agency.', 403)
     }
     return
   }
 
-  if (isCustomerAdmin(actor)) {
+  if (isStoreRoot(actor)) {
     if (operation === 'create') {
-      throw new APIError('Customer admins cannot create customers.', 403)
+      throw new APIError('Store root users cannot create stores.', 403)
     }
-    if (!actorCustomerId || !originalCustomerId || String(actorCustomerId) !== String(originalCustomerId)) {
-      throw new APIError('Customer admins can only update their own customer.', 403)
+    if (!actorStoreId || !originalStoreId || String(actorStoreId) !== String(originalStoreId)) {
+      throw new APIError('Store root users can only update their own store.', 403)
     }
     if (actorAgencyId && nextAgencyId && String(actorAgencyId) !== String(nextAgencyId)) {
-      throw new APIError('Customer admins cannot move customers across agencies.', 403)
+      throw new APIError('Store root users cannot move stores across agencies.', 403)
     }
     return
   }
 
-  throw new APIError('You do not have permission to manage customers.', 403)
+  throw new APIError('You do not have permission to manage stores.', 403)
 }
 
-export function validateCustomerDeletePermissions(args: {
+export function validateStoreDeletePermissions(args: {
   actor?: AppUserLike | null
   targetDoc?: any
 }) {
   const { actor, targetDoc } = args
   if (!actor || !targetDoc) return
-  if (isPlatformAdmin(actor)) return
+  if (isStoreheroRole(actor)) return
 
-  if (isAgencyAdmin(actor) && String(getId(actor.agency)) === String(getId(targetDoc.agency))) {
+  if (isAgencyRoot(actor) && String(getId(actor.agency)) === String(getId(targetDoc.agency))) {
     return
   }
 
-  throw new APIError('You do not have permission to delete this customer.', 403)
+  throw new APIError('You do not have permission to delete this store.', 403)
 }
 
 export function validateAssignmentWritePermissions(args: {
@@ -272,9 +293,9 @@ export function validateAssignmentWritePermissions(args: {
 }) {
   const { actor, assignmentAgency } = args
   if (!actor) return
-  if (isPlatformAdmin(actor)) return
+  if (isStoreheroRole(actor)) return
 
-  if (isAgencyAdmin(actor) && String(getId(actor.agency)) === String(getId(assignmentAgency))) {
+  if (isAgencyRoot(actor) && String(getId(actor.agency)) === String(getId(assignmentAgency))) {
     return
   }
 

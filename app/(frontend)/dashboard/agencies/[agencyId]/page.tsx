@@ -2,24 +2,31 @@ import { notFound } from 'next/navigation'
 import { Box, Button, Card, CardContent, Checkbox, FormControlLabel, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
 import { getAgencyPageData } from '@/lib/services/portal'
-import { createAgencyUser, createCustomer } from '@/lib/actions/portal'
-import { canManageAgencyUsers, canManageCustomer } from '@/lib/rules'
+import { createAgencyUser, createStore } from '@/lib/actions/portal'
+import { canManageAgencyUsers, canManageStore } from '@/lib/rules'
 import { LinkButton } from '@/components/mui/LinkButton'
+import { AnalyticsPanel } from '@/components/dashboard/AnalyticsPanel'
 
-export default async function AgencyDetailPage({ params }: { params: Promise<{ agencyId: string }> }) {
+export default async function AgencyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ agencyId: string }>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const user = await requireUser()
   const { agencyId } = await params
   const data = await getAgencyPageData(user, agencyId)
   if (!data) notFound()
 
   const canCreateAgencyUsers = canManageAgencyUsers(user)
-  const canCreateCustomers = canManageCustomer(user)
+  const canCreateStores = canManageStore(user)
 
   return (
     <Stack spacing={3}>
       <div>
         <Typography variant="h4">{data.agency.name}</Typography>
-        <Typography color="text.secondary">Agency workspace, internal users, customers, assignments, and invite state.</Typography>
+        <Typography color="text.secondary">Agency workspace, internal users, stores, assignments, invite state, and metrics.</Typography>
       </div>
 
       <Grid container spacing={2}>
@@ -41,8 +48,8 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
             <CardContent>
               <Typography variant="h6" gutterBottom>Counts</Typography>
               <Stack spacing={1}>
-                <Typography>Agency users: {data.users.filter((user: any) => !user.customer).length}</Typography>
-                <Typography>Customers: {data.customers.length}</Typography>
+                <Typography>Agency users: {data.users.filter((portalUser: any) => !portalUser.store).length}</Typography>
+                <Typography>Stores: {data.stores.length}</Typography>
                 <Typography>Assignments: {data.assignments.length}</Typography>
                 <Typography>Outstanding invites: {data.invites.filter((invite: any) => invite.status === 'pending').length}</Typography>
               </Stack>
@@ -51,14 +58,14 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
         </Grid>
       </Grid>
 
-      {canCreateCustomers ? (
+      {canCreateStores ? (
         <Card>
           <CardContent>
-            <Typography variant="h6" gutterBottom>Create customer</Typography>
-            <Stack component="form" action={createCustomer} spacing={2}>
+            <Typography variant="h6" gutterBottom>Create store</Typography>
+            <Stack component="form" action={createStore} spacing={2}>
               <input type="hidden" name="agencyId" value={agencyId} />
               <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 6 }}><TextField name="name" label="Customer name" required /></Grid>
+                <Grid size={{ xs: 12, md: 6 }}><TextField name="name" label="Store name" required /></Grid>
                 <Grid size={{ xs: 12, md: 3 }}>
                   <TextField name="status" label="Status" defaultValue="active" select>
                     <MenuItem value="active">active</MenuItem>
@@ -70,7 +77,7 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
                 <Grid size={{ xs: 12, md: 6 }}><TextField name="contactEmail" label="Contact email" type="email" /></Grid>
                 <Grid size={{ xs: 12, md: 6 }}><TextField name="contactPhone" label="Contact phone" /></Grid>
               </Grid>
-              <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Create customer</Button></Stack>
+              <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Create store</Button></Stack>
             </Stack>
           </CardContent>
         </Card>
@@ -86,14 +93,13 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
                 <Grid size={{ xs: 12, md: 4 }}><TextField name="name" label="Name" required /></Grid>
                 <Grid size={{ xs: 12, md: 4 }}><TextField name="email" label="Email" type="email" required /></Grid>
                 <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField name="role" label="Role" select defaultValue="agency-user">
-                    <MenuItem value="agency-admin">agency-admin</MenuItem>
-                    <MenuItem value="agency-manager">agency-manager</MenuItem>
-                    <MenuItem value="agency-user">agency-user</MenuItem>
+                  <TextField name="role" label="Role" select defaultValue="agency-member">
+                    <MenuItem value="agency-root">agency-root</MenuItem>
+                    <MenuItem value="agency-member">agency-member</MenuItem>
                   </TextField>
                 </Grid>
               </Grid>
-              <FormControlLabel control={<Checkbox name="hasGlobalCustomerAccess" />} label="Grant agency-wide customer visibility" />
+              <FormControlLabel control={<Checkbox name="hasGlobalStoreAccess" />} label="Grant agency-wide store visibility" />
               <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Invite agency user</Button></Stack>
             </Stack>
           </CardContent>
@@ -104,15 +110,15 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Customers</Typography>
+              <Typography variant="h6" gutterBottom>Stores</Typography>
               <Stack spacing={1.5}>
-                {data.customers.map((customer: any) => (
-                  <Stack key={customer.id} direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ p: 2, border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
+                {data.stores.map((store: any) => (
+                  <Stack key={store.id} direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} sx={{ p: 2, border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
                     <Box>
-                      <Typography fontWeight={700}>{customer.name}</Typography>
-                      <Typography color="text.secondary">{customer.status}</Typography>
+                      <Typography fontWeight={700}>{store.name}</Typography>
+                      <Typography color="text.secondary">{store.status}</Typography>
                     </Box>
-                    <LinkButton href={`/dashboard/customers/${customer.id}`} variant="outlined">Open</LinkButton>
+                    <LinkButton href={`/dashboard/stores/${store.id}`} variant="outlined">Open</LinkButton>
                   </Stack>
                 ))}
               </Stack>
@@ -124,11 +130,11 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
             <CardContent>
               <Typography variant="h6" gutterBottom>Agency users</Typography>
               <Stack spacing={1.5}>
-                {data.users.filter((user: any) => !user.customer).map((user: any) => (
-                  <Box key={user.id} sx={{ p: 2, border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
-                    <Typography fontWeight={700}>{user.name}</Typography>
-                    <Typography color="text.secondary">{user.email}</Typography>
-                    <Typography color="text.secondary">{user.role} · {user.status}</Typography>
+                {data.users.filter((portalUser: any) => !portalUser.store).map((portalUser: any) => (
+                  <Box key={portalUser.id} sx={{ p: 2, border: '1px solid rgba(15,23,42,0.08)', borderRadius: 3 }}>
+                    <Typography fontWeight={700}>{portalUser.name}</Typography>
+                    <Typography color="text.secondary">{portalUser.email}</Typography>
+                    <Typography color="text.secondary">{portalUser.role} · {portalUser.status}</Typography>
                   </Box>
                 ))}
               </Stack>
@@ -151,6 +157,15 @@ export default async function AgencyDetailPage({ params }: { params: Promise<{ a
           </Stack>
         </CardContent>
       </Card>
+
+      <AnalyticsPanel
+        user={user}
+        searchParams={searchParams}
+        title="Agency Analytics"
+        description="Tenant-scoped Shopify metrics grouped by selected granularity."
+        basePath={`/dashboard/agencies/${agencyId}`}
+        forcedAgencyId={Number(agencyId)}
+      />
     </Stack>
   )
 }

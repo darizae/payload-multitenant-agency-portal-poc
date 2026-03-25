@@ -2,9 +2,8 @@ import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
 import { canAccessAdminPanel, usersReadAccess } from '@/lib/access'
 import { validateUserBusinessRules, validateUserDeletePermissions, validateUserWritePermissions } from '@/lib/guards'
-import { isPlatformAdmin, isAgencyAdmin, isCustomerAdmin } from '@/lib/permissions'
+import { isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/lib/permissions'
 import { getId, randomToken } from '@/lib/utils'
-import { issueInvite } from '@/lib/invites'
 import { writeAuditLog } from '@/lib/audit'
 
 export const Users: CollectionConfig = {
@@ -16,38 +15,38 @@ export const Users: CollectionConfig = {
   },
   admin: {
     useAsTitle: 'email',
-    defaultColumns: ['name', 'email', 'role', 'status', 'agency', 'customer'],
+    defaultColumns: ['name', 'email', 'role', 'status', 'agency', 'store'],
   },
   access: {
     admin: canAccessAdminPanel,
     read: usersReadAccess,
     create: ({ req }) => {
       const user = req.user as any
-      return isPlatformAdmin(user) || isAgencyAdmin(user) || isCustomerAdmin(user)
+      return isStoreheroRole(user) || isAgencyRoot(user) || isStoreRoot(user)
     },
     update: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user)) return true
-      if (isAgencyAdmin(user)) {
+      if (isStoreheroRole(user)) return true
+      if (isAgencyRoot(user)) {
         const agencyId = getId(user?.agency)
         return agencyId ? { agency: { equals: agencyId } } : false
       }
-      if (isCustomerAdmin(user)) {
-        const customerId = getId(user?.customer)
-        return customerId ? { customer: { equals: customerId } } : false
+      if (isStoreRoot(user)) {
+        const storeId = getId(user?.store)
+        return storeId ? { store: { equals: storeId } } : false
       }
       return { id: { equals: getId(user?.id) } }
     },
     delete: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user)) return true
-      if (isAgencyAdmin(user)) {
+      if (isStoreheroRole(user)) return true
+      if (isAgencyRoot(user)) {
         const agencyId = getId(user?.agency)
         return agencyId ? { agency: { equals: agencyId } } : false
       }
-      if (isCustomerAdmin(user)) {
-        const customerId = getId(user?.customer)
-        return customerId ? { customer: { equals: customerId } } : false
+      if (isStoreRoot(user)) {
+        const storeId = getId(user?.store)
+        return storeId ? { store: { equals: storeId } } : false
       }
       return false
     },
@@ -87,42 +86,42 @@ export const Users: CollectionConfig = {
           targetDoc: doc,
         })
 
-        if (doc.role === 'agency-admin' && doc.status === 'active' && doc.agency) {
+        if (doc.role === 'agency-root' && doc.status === 'active' && doc.agency) {
           const count = await req.payload.count({
             collection: 'users',
             overrideAccess: true,
             where: {
               and: [
                 { agency: { equals: getId(doc.agency) } },
-                { role: { equals: 'agency-admin' } },
+                { role: { equals: 'agency-root' } },
                 { status: { equals: 'active' } },
               ],
             },
           })
           if (count.totalDocs <= 1) {
-            throw new APIError('You cannot delete the last active agency admin.', 400)
+            throw new APIError('You cannot delete the last active agency root user.', 400)
           }
         }
 
-        if (doc.role === 'customer-admin' && doc.status === 'active' && doc.customer) {
+        if (doc.role === 'store-root' && doc.status === 'active' && doc.store) {
           const count = await req.payload.count({
             collection: 'users',
             overrideAccess: true,
             where: {
               and: [
-                { customer: { equals: getId(doc.customer) } },
-                { role: { equals: 'customer-admin' } },
+                { store: { equals: getId(doc.store) } },
+                { role: { equals: 'store-root' } },
                 { status: { equals: 'active' } },
               ],
             },
           })
           if (count.totalDocs <= 1) {
-            throw new APIError('You cannot delete the last active customer admin.', 400)
+            throw new APIError('You cannot delete the last active store root user.', 400)
           }
         }
 
         const assignmentCount = await req.payload.count({
-          collection: 'agency-customer-assignments',
+          collection: 'agency-store-assignments',
           overrideAccess: true,
           where: {
             agencyUser: { equals: id },
@@ -172,16 +171,16 @@ export const Users: CollectionConfig = {
           }
         }
 
-        if (user.customer) {
-          const customer = await req.payload.findByID({
-            collection: 'customers',
-            id: getId(user.customer),
+        if (user.store) {
+          const store = await req.payload.findByID({
+            collection: 'stores',
+            id: getId(user.store),
             overrideAccess: true,
             depth: 0,
           })
 
-          if (!customer || customer.status !== 'active') {
-            throw new APIError('This customer workspace is not active.', 403)
+          if (!store || store.status !== 'active') {
+            throw new APIError('This store workspace is not active.', 403)
           }
         }
 
@@ -190,15 +189,6 @@ export const Users: CollectionConfig = {
     ],
     afterLogin: [
       async ({ user, req }) => {
-        await req.payload.update({
-          collection: 'users',
-          id: user.id,
-          overrideAccess: true,
-          data: {
-            lastLoginAt: new Date().toISOString(),
-          },
-        })
-
         await writeAuditLog({
           payload: req.payload,
           actor: user as any,
@@ -206,7 +196,7 @@ export const Users: CollectionConfig = {
           entityType: 'user',
           entityId: user.id,
           agency: getId(user.agency),
-          customer: getId(user.customer),
+          store: getId(user.store),
           summary: `User ${user.email} logged in`,
         })
 
@@ -215,16 +205,6 @@ export const Users: CollectionConfig = {
     ],
     afterChange: [
       async ({ doc, operation, req, previousDoc }) => {
-        if (operation === 'create' && doc.status === 'invited') {
-          await issueInvite({
-            targetUserId: doc.id,
-            email: doc.email,
-            actor: req.user as any,
-            agency: getId(doc.agency),
-            customer: getId(doc.customer),
-          })
-        }
-
         await writeAuditLog({
           payload: req.payload,
           actor: req.user as any,
@@ -232,7 +212,7 @@ export const Users: CollectionConfig = {
           entityType: 'user',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: getId(doc.customer),
+          store: getId(doc.store),
           summary: `${operation === 'create' ? 'Created' : 'Updated'} user ${doc.email}`,
           metadata: {
             previousRole: previousDoc?.role,
@@ -254,7 +234,7 @@ export const Users: CollectionConfig = {
           entityType: 'user',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: getId(doc.customer),
+          store: getId(doc.store),
           summary: `Deleted user ${doc.email}`,
         })
       },
@@ -271,12 +251,12 @@ export const Users: CollectionConfig = {
       type: 'select',
       required: true,
       options: [
-        'platform-admin',
-        'agency-admin',
-        'agency-manager',
-        'agency-user',
-        'customer-admin',
-        'customer-user',
+        'storehero-root',
+        'storehero-member',
+        'agency-root',
+        'agency-member',
+        'store-root',
+        'store-member',
       ],
     },
     {
@@ -295,19 +275,19 @@ export const Users: CollectionConfig = {
       },
     },
     {
-      name: 'customer',
+      name: 'store',
       type: 'relationship',
-      relationTo: 'customers',
+      relationTo: 'stores',
       admin: {
         position: 'sidebar',
       },
     },
     {
-      name: 'hasGlobalCustomerAccess',
+      name: 'hasGlobalStoreAccess',
       type: 'checkbox',
       defaultValue: false,
       admin: {
-        description: 'Useful for managers or specialists who should see every customer inside their agency.',
+        description: 'Useful for agency members who should see every store inside their agency.',
       },
     },
     {

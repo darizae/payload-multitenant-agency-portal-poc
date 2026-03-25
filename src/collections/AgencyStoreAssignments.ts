@@ -1,54 +1,37 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { canAccessAdminPanel } from '@/lib/access'
-import { isPlatformAdmin, isAgencyAdmin, isAgencyManager } from '@/lib/permissions'
+import { canAccessAdminPanel, getAssignedStoreIds } from '@/lib/access'
+import { isAgencyMember, isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
 import { validateAssignmentWritePermissions } from '@/lib/guards'
 import { getId } from '@/lib/utils'
 import { writeAuditLog } from '@/lib/audit'
 
-async function getAssignedCustomerIds(req: any, userId: string | number): Promise<Array<string | number>> {
-  const assignments = await req.payload.find({
-    collection: 'agency-customer-assignments',
-    depth: 0,
-    limit: 200,
-    overrideAccess: true,
-    where: {
-      and: [
-        { agencyUser: { equals: userId } },
-        { status: { equals: 'active' } },
-      ],
-    },
-  })
-
-  return (assignments.docs || []).map((doc: any) => doc.customer).filter(Boolean)
-}
-
-export const AgencyCustomerAssignments: CollectionConfig = {
-  slug: 'agency-customer-assignments',
+export const AgencyStoreAssignments: CollectionConfig = {
+  slug: 'agency-store-assignments',
   admin: {
     useAsTitle: 'assignmentLabel',
-    defaultColumns: ['agencyUser', 'customer', 'status', 'assignedAt'],
+    defaultColumns: ['agencyUser', 'store', 'status', 'assignedAt'],
   },
   access: {
     admin: canAccessAdminPanel,
     read: async ({ req }) => {
       const user = req.user as any
       if (!user) return false
-      if (isPlatformAdmin(user)) return true
+      if (isStoreheroRole(user)) return true
       const role = String(user?.role || '')
       const agencyId = getId(user?.agency)
       if (!agencyId) return false
-      if (isAgencyAdmin(user) || isAgencyManager(user)) {
+      if (isAgencyRoot(user) || isAgencyMember(user)) {
         return { agency: { equals: agencyId } }
       }
-      if (role === 'customer-admin' || role === 'customer-user') {
-        const customerId = getId(user?.customer)
-        return customerId ? { customer: { equals: customerId } } : false
+      if (role === 'store-root' || role === 'store-member') {
+        const storeId = getId(user?.store)
+        return storeId ? { store: { equals: storeId } } : false
       }
       const userId = getId(user?.id)
       if (!userId) return false
-      const assignedCustomerIds = await getAssignedCustomerIds(req, userId)
-      if (assignedCustomerIds.length === 0) {
+      const assignedStoreIds = await getAssignedStoreIds(req)
+      if (assignedStoreIds.length === 0) {
         return {
           and: [
             { agency: { equals: agencyId } },
@@ -62,17 +45,17 @@ export const AgencyCustomerAssignments: CollectionConfig = {
           {
             or: [
               { agencyUser: { equals: userId } },
-              { customer: { in: assignedCustomerIds } },
+              { store: { in: assignedStoreIds } },
             ],
           },
         ],
       }
     },
-    create: ({ req }) => isPlatformAdmin(req.user as any) || isAgencyAdmin(req.user as any),
+    create: ({ req }) => isStoreheroRole(req.user as any) || isAgencyRoot(req.user as any),
     update: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user)) return true
-      if (isAgencyAdmin(user)) {
+      if (isStoreheroRole(user)) return true
+      if (isAgencyRoot(user)) {
         const agencyId = getId(user?.agency)
         return agencyId ? { agency: { equals: agencyId } } : false
       }
@@ -80,8 +63,8 @@ export const AgencyCustomerAssignments: CollectionConfig = {
     },
     delete: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user)) return true
-      if (isAgencyAdmin(user)) {
+      if (isStoreheroRole(user)) return true
+      if (isAgencyRoot(user)) {
         const agencyId = getId(user?.agency)
         return agencyId ? { agency: { equals: agencyId } } : false
       }
@@ -97,40 +80,40 @@ export const AgencyCustomerAssignments: CollectionConfig = {
           ...(data || {}),
         }
         const agencyUserId = getId(draft.agencyUser)
-        const customerId = getId(draft.customer)
+        const storeId = getId(draft.store)
         const agencyId = getId(draft.agency)
 
-        if (!agencyUserId || !customerId || !agencyId) return data
+        if (!agencyUserId || !storeId || !agencyId) return data
         validateAssignmentWritePermissions({
           actor: req.user as any,
           assignmentAgency: agencyId,
         })
 
-        const [agencyUser, customer] = await Promise.all([
+        const [agencyUser, store] = await Promise.all([
           req.payload.findByID({ collection: 'users', id: agencyUserId, overrideAccess: true, depth: 0 }),
-          req.payload.findByID({ collection: 'customers', id: customerId, overrideAccess: true, depth: 0 }),
+          req.payload.findByID({ collection: 'stores', id: storeId, overrideAccess: true, depth: 0 }),
         ])
 
-        if (!agencyUser || !customer) throw new APIError('Assignment references are invalid.', 400)
+        if (!agencyUser || !store) throw new APIError('Assignment references are invalid.', 400)
 
-        if (agencyUser.role === 'customer-admin' || agencyUser.role === 'customer-user') {
-          throw new APIError('Only agency-side users can be assigned to customers.', 400)
+        if (agencyUser.role === 'store-root' || agencyUser.role === 'store-member') {
+          throw new APIError('Only agency-side users can be assigned to stores.', 400)
         }
 
-        if (String(getId(agencyUser.agency)) !== String(agencyId) || String(getId(customer.agency)) !== String(agencyId)) {
-          throw new APIError('Assignment agency, agency user, and customer must all belong to the same agency.', 400)
+        if (String(getId(agencyUser.agency)) !== String(agencyId) || String(getId(store.agency)) !== String(agencyId)) {
+          throw new APIError('Assignment agency, agency user, and store must all belong to the same agency.', 400)
         }
 
         if (draft.status === 'active') {
           const existing = await req.payload.find({
-            collection: 'agency-customer-assignments',
+            collection: 'agency-store-assignments',
             depth: 0,
             limit: 1,
             overrideAccess: true,
             where: {
               and: [
                 { agencyUser: { equals: agencyUserId } },
-                { customer: { equals: customerId } },
+                { store: { equals: storeId } },
                 { status: { equals: 'active' } },
               ],
             },
@@ -138,12 +121,12 @@ export const AgencyCustomerAssignments: CollectionConfig = {
 
           const currentId = getId(originalDoc?.id)
           if (existing.totalDocs > 0 && String(existing.docs[0].id) !== String(currentId)) {
-            throw new APIError('This agency user is already actively assigned to that customer.', 400)
+            throw new APIError('This agency user is already actively assigned to that store.', 400)
           }
         }
 
         const nextData = data || {}
-        nextData.assignmentLabel = `${agencyUser.name || agencyUser.email} → ${customer.name}`
+        nextData.assignmentLabel = `${agencyUser.name || agencyUser.email} -> ${store.name}`
         nextData.assignedAt = draft.assignedAt || new Date().toISOString()
         return nextData
       },
@@ -157,7 +140,7 @@ export const AgencyCustomerAssignments: CollectionConfig = {
           entityType: 'assignment',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: getId(doc.customer),
+          store: getId(doc.store),
           summary: `${operation === 'create' ? 'Created' : 'Updated'} assignment ${doc.assignmentLabel}`,
         })
         return doc
@@ -172,7 +155,7 @@ export const AgencyCustomerAssignments: CollectionConfig = {
           entityType: 'assignment',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: getId(doc.customer),
+          store: getId(doc.store),
           summary: `Deleted assignment ${doc.assignmentLabel}`,
         })
       },
@@ -199,9 +182,9 @@ export const AgencyCustomerAssignments: CollectionConfig = {
       required: true,
     },
     {
-      name: 'customer',
+      name: 'store',
       type: 'relationship',
-      relationTo: 'customers',
+      relationTo: 'stores',
       required: true,
     },
     {

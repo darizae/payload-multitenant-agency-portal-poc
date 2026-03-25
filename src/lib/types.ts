@@ -8,8 +8,8 @@ export type AppUserLike = {
   role?: UserRole | null
   status?: UserStatus | null
   agency?: ID | { id?: ID; name?: string | null; status?: string | null } | null
-  customer?: ID | { id?: ID; name?: string | null; status?: string | null; agency?: ID | { id?: ID } | null } | null
-  hasGlobalCustomerAccess?: boolean | null
+  store?: ID | { id?: ID; name?: string | null; status?: string | null; agency?: ID | { id?: ID } | null } | null
+  hasGlobalStoreAccess?: boolean | null
   name?: string | null
 }
 
@@ -19,7 +19,7 @@ export type AgencyLike = {
   status?: string | null
 }
 
-export type CustomerLike = {
+export type StoreLike = {
   id?: ID
   name?: string | null
   status?: string | null

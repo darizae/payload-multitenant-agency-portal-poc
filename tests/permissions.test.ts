@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { canAccessPayloadAdmin, hasAutomaticAgencyWideCustomerAccess } from '@/lib/permissions'
+import { canAccessPayloadAdmin, hasAutomaticAgencyWideStoreAccess } from '@/lib/permissions'
 
 describe('permissions', () => {
-  it('allows platform and agency admins into payload admin', () => {
-    expect(canAccessPayloadAdmin({ role: 'platform-admin' })).toBe(true)
-    expect(canAccessPayloadAdmin({ role: 'agency-admin' })).toBe(true)
-    expect(canAccessPayloadAdmin({ role: 'agency-manager' })).toBe(true)
-    expect(canAccessPayloadAdmin({ role: 'customer-admin' })).toBe(false)
+  it('allows storehero and agency root roles into payload admin', () => {
+    expect(canAccessPayloadAdmin({ role: 'storehero-root' })).toBe(true)
+    expect(canAccessPayloadAdmin({ role: 'storehero-member' })).toBe(true)
+    expect(canAccessPayloadAdmin({ role: 'agency-root' })).toBe(true)
+    expect(canAccessPayloadAdmin({ role: 'agency-member' })).toBe(false)
+    expect(canAccessPayloadAdmin({ role: 'store-root' })).toBe(false)
   })
 
-  it('respects agency-wide customer access', () => {
-    expect(hasAutomaticAgencyWideCustomerAccess({ role: 'agency-admin' })).toBe(true)
-    expect(hasAutomaticAgencyWideCustomerAccess({ role: 'agency-user', hasGlobalCustomerAccess: true })).toBe(true)
-    expect(hasAutomaticAgencyWideCustomerAccess({ role: 'agency-user', hasGlobalCustomerAccess: false })).toBe(false)
+  it('respects agency-wide store access', () => {
+    expect(hasAutomaticAgencyWideStoreAccess({ role: 'agency-root' })).toBe(true)
+    expect(hasAutomaticAgencyWideStoreAccess({ role: 'agency-member', hasGlobalStoreAccess: true })).toBe(true)
+    expect(hasAutomaticAgencyWideStoreAccess({ role: 'agency-member', hasGlobalStoreAccess: false })).toBe(false)
   })
 })

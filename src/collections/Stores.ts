@@ -1,41 +1,41 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { customersReadAccess, canAccessAdminPanel } from '@/lib/access'
-import { isPlatformAdmin, isAgencyAdmin, isAgencyManager } from '@/lib/permissions'
+import { storesReadAccess, canAccessAdminPanel } from '@/lib/access'
+import { isAgencyMember, isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
 import { getId } from '@/lib/utils'
-import { validateCustomerBusinessRules, validateCustomerDeletePermissions, validateCustomerWritePermissions } from '@/lib/guards'
+import { validateStoreBusinessRules, validateStoreDeletePermissions, validateStoreWritePermissions } from '@/lib/guards'
 import { writeAuditLog } from '@/lib/audit'
 
-export const Customers: CollectionConfig = {
-  slug: 'customers',
+export const Stores: CollectionConfig = {
+  slug: 'stores',
   admin: {
     useAsTitle: 'name',
     defaultColumns: ['name', 'agency', 'status', 'updatedAt'],
   },
   access: {
     admin: canAccessAdminPanel,
-    read: customersReadAccess,
+    read: storesReadAccess,
     create: ({ req }) => {
       const user = req.user as any
-      return isPlatformAdmin(user) || isAgencyAdmin(user) || isAgencyManager(user)
+      return isStoreheroRole(user) || isAgencyRoot(user) || isAgencyMember(user)
     },
     update: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user)) return true
-      if (isAgencyAdmin(user) || isAgencyManager(user)) {
+      if (isStoreheroRole(user)) return true
+      if (isAgencyRoot(user) || isAgencyMember(user)) {
         const agencyId = getId(user?.agency)
         return agencyId ? { agency: { equals: agencyId } } : false
       }
-      if (user?.role === 'customer-admin') {
-        const customerId = getId(user?.customer)
-        return customerId ? { id: { equals: customerId } } : false
+      if (user?.role === 'store-root') {
+        const storeId = getId(user?.store)
+        return storeId ? { id: { equals: storeId } } : false
       }
       return false
     },
     delete: ({ req }) => {
       const user = req.user as any
-      if (isPlatformAdmin(user)) return true
-      if (isAgencyAdmin(user)) {
+      if (isStoreheroRole(user)) return true
+      if (isAgencyRoot(user)) {
         const agencyId = getId(user?.agency)
         return agencyId ? { agency: { equals: agencyId } } : false
       }
@@ -45,34 +45,46 @@ export const Customers: CollectionConfig = {
   hooks: {
     beforeChange: [
       async ({ data, originalDoc, req, operation }) => {
-        validateCustomerWritePermissions({
+        validateStoreWritePermissions({
           actor: req.user as any,
           originalDoc,
           nextData: data || {},
           operation,
         })
-        await validateCustomerBusinessRules({ originalDoc, nextData: data || {} })
+        await validateStoreBusinessRules({ originalDoc, nextData: data || {} })
         return data
       },
     ],
     beforeDelete: [
       async ({ req, id }) => {
-        const customer = await req.payload.findByID({ collection: 'customers', id, overrideAccess: true, depth: 0 })
-        validateCustomerDeletePermissions({
+        const store = await req.payload.findByID({ collection: 'stores', id, overrideAccess: true, depth: 0 })
+        validateStoreDeletePermissions({
           actor: req.user as any,
-          targetDoc: customer,
+          targetDoc: store,
         })
 
-        const assignments = await req.payload.count({
-          collection: 'agency-customer-assignments',
-          overrideAccess: true,
-          where: {
-            customer: { equals: id },
-          },
-        })
+        const [assignments, metrics] = await Promise.all([
+          req.payload.count({
+            collection: 'agency-store-assignments',
+            overrideAccess: true,
+            where: {
+              store: { equals: id },
+            },
+          }),
+          req.payload.count({
+            collection: 'store-daily-metrics',
+            overrideAccess: true,
+            where: {
+              store: { equals: id },
+            },
+          }),
+        ])
 
         if (assignments.totalDocs > 0) {
-          throw new APIError('Remove agency assignments before deleting a customer.', 400)
+          throw new APIError('Remove agency assignments before deleting a store.', 400)
+        }
+        if (metrics.totalDocs > 0) {
+          throw new APIError('Remove metrics before deleting a store.', 400)
         }
       },
     ],
@@ -81,13 +93,14 @@ export const Customers: CollectionConfig = {
         await writeAuditLog({
           payload: req.payload,
           actor: req.user as any,
-          action: `customer.${operation}`,
-          entityType: 'customer',
+          action: `store.${operation}`,
+          entityType: 'store',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: doc.id,
-          summary: `${operation === 'create' ? 'Created' : 'Updated'} customer ${doc.name}`,
+          store: null,
+          summary: `${operation === 'create' ? 'Created' : 'Updated'} store ${doc.name}`,
           metadata: {
+            storeId: doc.id,
             previousStatus: previousDoc?.status,
             nextStatus: doc.status,
           },
@@ -100,12 +113,12 @@ export const Customers: CollectionConfig = {
         await writeAuditLog({
           payload: req.payload,
           actor: req.user as any,
-          action: 'customer.delete',
-          entityType: 'customer',
+          action: 'store.delete',
+          entityType: 'store',
           entityId: doc.id,
           agency: getId(doc.agency),
-          customer: null,
-          summary: `Deleted customer ${doc.name}`,
+          store: null,
+          summary: `Deleted store ${doc.name}`,
         })
       },
     ],
@@ -148,7 +161,7 @@ export const Customers: CollectionConfig = {
       name: 'settings',
       type: 'json',
       defaultValue: {
-        customerCanManageUsers: true,
+        storeCanManageUsers: true,
       },
     },
   ],

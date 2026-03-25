@@ -1,18 +1,20 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { buildConfig } from 'payload'
-import { sqliteAdapter } from '@payloadcms/db-sqlite'
+import { postgresAdapter } from '@payloadcms/db-postgres'
 import sharp from 'sharp'
 import { Agencies } from '@/collections/Agencies'
 import { Users } from '@/collections/Users'
-import { Customers } from '@/collections/Customers'
-import { AgencyCustomerAssignments } from '@/collections/AgencyCustomerAssignments'
+import { Stores } from '@/collections/Stores'
+import { AgencyStoreAssignments } from '@/collections/AgencyStoreAssignments'
 import { InviteTokens } from '@/collections/InviteTokens'
 import { AuditLogs } from '@/collections/AuditLogs'
+import { StoreDailyMetrics } from '@/collections/StoreDailyMetrics'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 const serverURL = process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000'
+const shouldPushDatabaseSchema = process.env.PAYLOAD_PUSH_SCHEMA === 'true'
 
 export default buildConfig({
   secret: process.env.PAYLOAD_SECRET || 'dev-only-secret',
@@ -28,13 +30,12 @@ export default buildConfig({
       baseDir: dirname,
     },
   },
-  collections: [Agencies, Users, Customers, AgencyCustomerAssignments, InviteTokens, AuditLogs],
-  db: sqliteAdapter({
-    client: {
-      url: process.env.DATABASE_URI || 'file:./.data/agency-portal.db',
+  collections: [Agencies, Users, Stores, AgencyStoreAssignments, InviteTokens, AuditLogs, StoreDailyMetrics],
+  db: postgresAdapter({
+    push: shouldPushDatabaseSchema,
+    pool: {
+      connectionString: process.env.DATABASE_URI || 'postgresql://postgres:postgres@localhost:5432/agency_portal',
     },
-    wal: true,
-    busyTimeout: 3000,
   }),
   sharp,
   telemetry: false,

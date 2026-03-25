@@ -5,7 +5,10 @@ let payloadPromise: ReturnType<typeof getPayload> | null = null
 
 export async function getPayloadClient() {
   if (!payloadPromise) {
-    payloadPromise = getPayload({ config })
+    payloadPromise = getPayload({ config }).catch((error) => {
+      payloadPromise = null
+      throw error
+    })
   }
 
   return payloadPromise

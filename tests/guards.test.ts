@@ -1,80 +1,80 @@
 import { describe, expect, it } from 'vitest'
 import {
   validateAssignmentWritePermissions,
-  validateCustomerWritePermissions,
+  validateStoreWritePermissions,
   validateUserWritePermissions,
 } from '@/lib/guards'
 
 describe('guard permissions', () => {
-  it('blocks customer admins from creating agency roles', () => {
+  it('blocks store root users from creating agency roles', () => {
     expect(() =>
       validateUserWritePermissions({
-        actor: { role: 'customer-admin', agency: 'agency-1', customer: 'customer-1' },
+        actor: { role: 'store-root', agency: 'agency-1', store: 'store-1' },
         operation: 'create',
         nextData: {
-          role: 'agency-admin',
+          role: 'agency-root',
           agency: 'agency-1',
-          customer: 'customer-1',
+          store: 'store-1',
         },
       }),
     ).toThrow()
   })
 
-  it('blocks agency admins from creating platform admins', () => {
+  it('blocks agency root users from creating storehero users', () => {
     expect(() =>
       validateUserWritePermissions({
-        actor: { role: 'agency-admin', agency: 'agency-1' },
+        actor: { role: 'agency-root', agency: 'agency-1' },
         operation: 'create',
         nextData: {
-          role: 'platform-admin',
+          role: 'storehero-root',
           agency: 'agency-1',
         },
       }),
     ).toThrow()
   })
 
-  it('allows agency users to create customer users in their own agency', () => {
+  it('allows agency members to create store users in their own agency', () => {
     expect(() =>
       validateUserWritePermissions({
-        actor: { role: 'agency-user', agency: 'agency-1' },
+        actor: { role: 'agency-member', agency: 'agency-1' },
         operation: 'create',
         nextData: {
-          role: 'customer-user',
+          role: 'store-member',
           agency: 'agency-1',
-          customer: 'customer-1',
+          store: 'store-1',
         },
       }),
     ).not.toThrow()
   })
 
-  it('blocks agency users from creating agency roles', () => {
+  it('blocks agency members from creating agency roles', () => {
     expect(() =>
       validateUserWritePermissions({
-        actor: { role: 'agency-user', agency: 'agency-1' },
+        actor: { role: 'agency-member', agency: 'agency-1' },
         operation: 'create',
         nextData: {
-          role: 'agency-user',
+          role: 'agency-member',
           agency: 'agency-1',
         },
       }),
     ).toThrow()
   })
 
-  it('blocks agency admins from writing customers outside their agency', () => {
+  it('blocks agency root users from writing stores outside their agency', () => {
     expect(() =>
-      validateCustomerWritePermissions({
-        actor: { role: 'agency-admin', agency: 'agency-1' },
+      validateStoreWritePermissions({
+        actor: { role: 'agency-root', agency: 'agency-1' },
         operation: 'update',
-        originalDoc: { id: 'customer-2', agency: 'agency-2' },
+        originalDoc: { id: 'store-2', agency: 'agency-2' },
         nextData: {},
       }),
     ).toThrow()
   })
 
-  it('blocks agency admins from writing assignments outside their agency', () => {
+  it('blocks agency root users from writing assignments outside their agency', () => {
     expect(() =>
       validateAssignmentWritePermissions({
-        actor: { role: 'agency-admin', agency: 'agency-1' },
+        actor: { role: 'agency-root', agency: 'agency-1' },
         assignmentAgency: 'agency-2',
       }),
     ).toThrow()

@@ -10,7 +10,7 @@ export async function issueInvite(params: {
   email: string
   actor?: AppUserLike | null
   agency?: string | number | null
-  customer?: string | number | null
+  store?: string | number | null
 }) {
   const payload = await getPayloadClient() as any
   const token = randomToken(20)
@@ -24,7 +24,7 @@ export async function issueInvite(params: {
       user: params.targetUserId,
       email: params.email,
       agency: params.agency || undefined,
-      customer: params.customer || undefined,
+      store: params.store || undefined,
       invitedBy: getId(params.actor),
       expiresAt,
       status: 'pending',
@@ -38,7 +38,7 @@ export async function issueInvite(params: {
     entityType: 'invite-token',
     entityId: invite.id,
     agency: params.agency || undefined,
-    customer: params.customer || undefined,
+    store: params.store || undefined,
     summary: `Issued invite for ${params.email}`,
     metadata: {
       tokenPreview: token.slice(0, 10),

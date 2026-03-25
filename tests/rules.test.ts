@@ -1,89 +1,89 @@
 import { describe, expect, it } from 'vitest'
 import {
-  assertLastAgencyAdminProtection,
-  assertLastCustomerAdminProtection,
+  assertLastAgencyRootProtection,
+  assertLastStoreRootProtection,
   assertNoAgencyTransfer,
-  canManageCustomerUsers,
-  canUserSeeCustomer,
+  canManageStoreUsers,
+  canUserSeeStore,
   validateUserShape,
 } from '@/lib/rules'
 
 describe('business rules', () => {
-  it('blocks removing the last agency admin', () => {
+  it('blocks removing the last agency root user', () => {
     expect(
-      assertLastAgencyAdminProtection({
-        activeAgencyAdminCount: 1,
-        originalRole: 'agency-admin',
-        nextRole: 'agency-user',
+      assertLastAgencyRootProtection({
+        activeAgencyRootCount: 1,
+        originalRole: 'agency-root',
+        nextRole: 'agency-member',
         originalStatus: 'active',
         nextStatus: 'active',
       }),
-    ).toContain('last active agency admin')
+    ).toContain('last active agency root')
   })
 
-  it('blocks removing the last customer admin', () => {
+  it('blocks removing the last store root user', () => {
     expect(
-      assertLastCustomerAdminProtection({
-        activeCustomerAdminCount: 1,
-        originalRole: 'customer-admin',
-        nextRole: 'customer-user',
+      assertLastStoreRootProtection({
+        activeStoreRootCount: 1,
+        originalRole: 'store-root',
+        nextRole: 'store-member',
         originalStatus: 'active',
         nextStatus: 'active',
       }),
-    ).toContain('last active customer admin')
+    ).toContain('last active store root')
   })
 
   it('forbids agency transfer', () => {
-    expect(assertNoAgencyTransfer({ originalAgencyId: 'a', nextAgencyId: 'b' })).toContain('forbidden in v1')
+    expect(assertNoAgencyTransfer({ originalAgencyId: 'a', nextAgencyId: 'b' })).toContain('forbidden in v2')
   })
 
-  it('validates tenant shape for customer users', () => {
-    const errors = validateUserShape({ role: 'customer-admin', agency: null, customer: null })
-    expect(errors.join(' ')).toContain('Customer users must belong to a customer')
+  it('validates tenant shape for store users', () => {
+    const errors = validateUserShape({ role: 'store-root', agency: null, store: null })
+    expect(errors.join(' ')).toContain('Store users must belong to a store')
   })
 
-  it('allows agency admins to see any customer in their agency', () => {
+  it('allows agency root users to see any store in their agency', () => {
     expect(
-      canUserSeeCustomer({
-        user: { role: 'agency-admin', agency: 'agency-1' },
-        customer: { id: 'cust-1', agency: 'agency-1' },
+      canUserSeeStore({
+        user: { role: 'agency-root', agency: 'agency-1' },
+        store: { id: 'store-1', agency: 'agency-1' },
       }),
     ).toBe(true)
   })
 
-  it('restricts agency standard users to assigned customers', () => {
+  it('restricts agency members to assigned stores', () => {
     expect(
-      canUserSeeCustomer({
-        user: { role: 'agency-user', agency: 'agency-1' },
-        customer: { id: 'cust-1', agency: 'agency-1' },
-        assignedCustomerIds: ['cust-2'],
+      canUserSeeStore({
+        user: { role: 'agency-member', agency: 'agency-1' },
+        store: { id: 'store-1', agency: 'agency-1' },
+        assignedStoreIds: ['store-2'],
       }),
     ).toBe(false)
   })
 
-  it('restricts customer users to their own customer', () => {
+  it('restricts store members to their own store', () => {
     expect(
-      canUserSeeCustomer({
-        user: { role: 'customer-user', agency: 'agency-1', customer: 'cust-1' },
-        customer: { id: 'cust-2', agency: 'agency-1' },
+      canUserSeeStore({
+        user: { role: 'store-member', agency: 'agency-1', store: 'store-1' },
+        store: { id: 'store-2', agency: 'agency-1' },
       }),
     ).toBe(false)
   })
 
-  it('blocks agency admins from managing customer users across agencies', () => {
+  it('blocks agency root users from managing store users across agencies', () => {
     expect(
-      canManageCustomerUsers({
-        user: { role: 'agency-admin', agency: 'agency-1' },
-        customer: { id: 'cust-9', agency: 'agency-2' },
+      canManageStoreUsers({
+        user: { role: 'agency-root', agency: 'agency-1' },
+        store: { id: 'store-9', agency: 'agency-2' },
       }),
     ).toBe(false)
   })
 
-  it('allows agency admins to manage customer users in their own agency', () => {
+  it('allows agency root users to manage store users in their own agency', () => {
     expect(
-      canManageCustomerUsers({
-        user: { role: 'agency-admin', agency: 'agency-1' },
-        customer: { id: 'cust-9', agency: 'agency-1' },
+      canManageStoreUsers({
+        user: { role: 'agency-root', agency: 'agency-1' },
+        store: { id: 'store-9', agency: 'agency-1' },
       }),
     ).toBe(true)
   })

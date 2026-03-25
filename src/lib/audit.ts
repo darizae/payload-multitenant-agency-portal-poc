@@ -9,24 +9,33 @@ export async function writeAuditLog(params: {
   entityType: string
   entityId?: string | number | null
   agency?: string | number | null
-  customer?: string | number | null
+  store?: string | number | null
   summary: string
   metadata?: Record<string, unknown>
 }) {
-  const { payload, actor, action, entityType, entityId, agency, customer, summary, metadata } = params
+  const { payload, actor, action, entityType, entityId, agency, store, summary, metadata } = params
+  const actorId = getId(actor)
+  const actorIdString = actorId ? String(actorId) : null
+  const entityIdString = entityId ? String(entityId) : null
+  const shouldAttachActorRelationship = Boolean(actorIdString) && !(entityType === 'user' && actorIdString === entityIdString)
+  const actorMetadata = {
+    actorId: actorIdString,
+    actorEmail: actor?.email || null,
+  }
+  const nextMetadata = metadata ? { ...actorMetadata, ...metadata } : actorMetadata
 
   await (payload as any).create({
     collection: 'audit-logs',
     overrideAccess: true,
     data: {
-      actor: getId(actor),
+      actor: shouldAttachActorRelationship ? actorId : undefined,
       action,
       entityType,
       entityId: entityId ? String(entityId) : undefined,
       agency,
-      customer,
+      store,
       summary,
-      metadata,
+      metadata: nextMetadata,
     },
   })
 }
