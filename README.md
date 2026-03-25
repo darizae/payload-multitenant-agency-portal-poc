@@ -1,28 +1,38 @@
-# Payload Multi-Tenant Agency Portal POC
+# Payload Multi-Tenant Agency Portal POC (Phase 2)
 
-A fully runnable proof-of-concept for the multi-tenant agency / customer user-management model described in the supplied draft spec and transcript.
+A runnable multitenant POC that demonstrates tenant-scoped user management and Shopify-style BI analytics on Postgres.
 
-This repo uses:
+## Stack
 
-- Payload CMS v3 on the current stable 3.79 line
+- Payload CMS v3.80
 - Next.js App Router
-- SQLite for a zero-infrastructure local run
-- A custom Material UI portal for the operational workflow
-- Payload's own admin for backend inspection and direct CRUD
+- Postgres 16 (Docker)
+- Adminer for DB inspection
+- Material UI portal
+- Parquet synthetic metrics fixture generated with Python
 
-## What this prototype demonstrates
+## What this POC demonstrates
 
-- Agency as the top-level tenant
-- Agency users scoped to one agency
-- Customers scoped to one agency
-- Customer users scoped to one customer
-- Assignment-based visibility for restricted agency users
-- Invite-based user creation flow
-- Last-admin protections for agency admins and customer admins
-- Audit logging for key mutations and logins
-- A runnable MUI portal plus the Payload admin UI
+- Agency tenants with strict tenant isolation
+- Role model:
+  - `storehero-root`
+  - `storehero-member`
+  - `agency-root`
+  - `agency-member`
+  - `store-root`
+  - `store-member`
+- Store scoping with assignment overlays for agency members
+- Invite activation flow
+- Agency/store/user CRUD with Payload access + hooks
+- Daily Shopify metrics (`store-daily-metrics`) scoped by tenant/store
+- BI dashboard filters:
+  - date range
+  - granularity (`day|week|month|year`)
+  - store selector
+  - previous equal period comparison
+- Tenant-specific theming after login via agency branding fields
 
-## Boot the app
+## Bootstrap
 
 1. Install dependencies
 
@@ -30,68 +40,103 @@ This repo uses:
 npm install
 ```
 
-2. Generate Payload types/import map and seed the SQLite database
+2. (Optional) Regenerate parquet fixture
+
+```bash
+python3 -m pip install -r scripts/data/requirements.txt
+npm run data:generate
+```
+
+3. Bootstrap the app (resets DB volume, waits for Postgres, generates types/import map, seeds data)
 
 ```bash
 npm run bootstrap
 ```
 
-3. Start the app
+`bootstrap` is destructive by design for this phase and always rebuilds the local DB state from seed.
+
+4. Start dev server
 
 ```bash
 npm run dev
 ```
 
-4. Open the app
+Keep a single `next dev` process for this workspace.
 
-- MUI portal: `http://localhost:3000/login`
+5. Open:
+
+- Portal: `http://localhost:3000/login`
 - Payload admin: `http://localhost:3000/admin`
+- Adminer: `http://localhost:8080`
 
-## Demo credentials
+## DB Ops Commands
 
-All seeded accounts use the password:
+```bash
+npm run db:up
+npm run db:down
+npm run db:reset
+npm run db:status
+npm run db:poll
+npm run db:logs
+npm run db:reseed
+```
+
+## Runtime DB behavior
+
+- Runtime commands (`dev`, `build`, `start`) run with `PAYLOAD_PUSH_SCHEMA=false`.
+- Schema push is enabled only for seeding/bootstrap (`PAYLOAD_PUSH_SCHEMA=true` in `seed`).
+- If local state is inconsistent, run `npm run db:reseed`.
+
+## Seeded credentials
+
+All seeded active users use:
 
 ```text
 Passw0rd!Demo
 ```
 
-Main demo logins:
+Primary accounts:
 
-- `platform.admin@poc.local` — platform admin
-- `alpha.admin@poc.local` — agency admin
-- `alpha.manager@poc.local` — agency manager
-- `alpha.user@poc.local` — restricted agency user
-- `store1.admin@poc.local` — customer admin
-- `store1.user@poc.local` — customer standard user
+- `storehero.root@poc.local` (`storehero-root`)
+- `storehero.member@poc.local` (`storehero-member`)
+- `aurora.agency+root@poc.local` (`agency-root`)
+- `aurora.agency+member@poc.local` (`agency-member`)
+- `aurora.bikes+root@poc.local` (`store-root`)
 
-There is also a pending invite account created during seed:
+Pending invite demo account:
 
-- `pending.invite@poc.local`
+- `aurora.bikes+member@poc.local` (`store-member`, invited)
 
-To activate it, sign in as a privileged user, inspect the latest invite token in the agency/customer view, then open the shown `/activate-invite/<token>` URL.
+Activate with:
 
-## Project structure
+`/activate-invite/<token>`
 
-- `payload.config.ts` — Payload configuration and SQLite adapter
-- `src/collections` — collections for agencies, users, customers, assignments, invites, audit logs
-- `src/lib/rules.ts` — business-rule engine used in hooks and tests
-- `src/lib/actions/portal.ts` — server actions for MUI portal workflows
-- `scripts/seed.ts` — idempotent seed data
-- `dev_notes/FULL_COVERAGE_SPEC.md` — authoritative implementation spec
-- `dev_notes/NAVIGATION_GUIDE.md` — walkthrough showing how to demonstrate the POC
+Find token in the agency/store workspace invite list or in Payload admin (`invite-tokens`).
 
-## Useful commands
+## Data model highlights
+
+- `agencies`
+- `stores`
+- `users`
+- `agency-store-assignments`
+- `store-daily-metrics`
+- `invite-tokens`
+- `audit-logs`
+
+Synthetic metrics fixture:
+
+- `data/fixtures/shopify_metrics_daily.parquet`
+- 10,950 rows (3 agencies × 5 stores × 730 days)
+
+## Quality gates
 
 ```bash
-npm run dev
-npm run build
-npm run start
-npm run seed
-npm run typecheck
-npm run test
 npm run check
+npm run build
 ```
 
-## Notes on UI
+## Notes
 
-The custom portal is intentionally Material UI based and tuned for slim, readable forms and tables. Payload's own generated admin UI remains available for direct CRUD, debugging, and validating that the schema and hooks are really powered by Payload rather than mocked front-end state.
+- This phase is intentionally breaking versus the original SQLite/customer model.
+- Postgres is the source of truth for local and deployment-like behavior.
+- Source dimension is Shopify-only in this phase.
