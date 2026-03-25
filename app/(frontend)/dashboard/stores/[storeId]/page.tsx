@@ -2,9 +2,9 @@ import { notFound } from 'next/navigation'
 import { Box, Button, Card, CardContent, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
 import { getStorePageData } from '@/lib/services/portal'
-import { createAssignment, createStoreUser } from '@/lib/actions/portal'
+import { createAssignment, createStoreMetric, createStoreUser } from '@/lib/actions/portal'
 import { getAssignedStoreIdsForUser } from '@/lib/services/portal'
-import { canManageStoreUsers } from '@/lib/rules'
+import { canManageStoreUsers, canWriteMetricsForStore } from '@/lib/rules'
 import { isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
 import { AnalyticsPanel } from '@/components/dashboard/AnalyticsPanel'
 
@@ -25,6 +25,7 @@ export default async function StoreDetailPage({
 
   const canCreateUsers = canManageStoreUsers({ user, store: data.store, assignedStoreIds })
   const canAssign = isStoreheroRole(user) || isAgencyRoot(user)
+  const canCreateMetrics = canWriteMetricsForStore({ user, store: data.store, assignedStoreIds })
 
   return (
     <Stack spacing={3}>
@@ -95,6 +96,27 @@ export default async function StoreDetailPage({
                 ))}
               </TextField>
               <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Assign user</Button></Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canCreateMetrics ? (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Add metric entry</Typography>
+            <Stack component="form" action={createStoreMetric} spacing={2}>
+              <input type="hidden" name="tenantId" value={(data.store.agency as any)?.id || data.store.agency} />
+              <input type="hidden" name="storeId" value={storeId} />
+              <input type="hidden" name="returnPath" value={`/dashboard/stores/${storeId}`} />
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="metricDate" label="Date" type="date" required InputLabelProps={{ shrink: true }} /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="netSales" label="Net sales" type="number" required /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="grossProfit" label="Gross profit" type="number" required /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="marketingAdSpend" label="Marketing ad spend" type="number" required /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="mer" label="MER" type="number" required /></Grid>
+              </Grid>
+              <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Save metric entry</Button></Stack>
             </Stack>
           </CardContent>
         </Card>

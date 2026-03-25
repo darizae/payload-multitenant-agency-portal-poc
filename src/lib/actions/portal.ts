@@ -5,13 +5,21 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
 import { getPayloadClient } from '@/lib/payload'
 import { getId } from '@/lib/utils'
-import { canManageAgencyUsers, canManageStoreUsers } from '@/lib/rules'
+import { canManageAgencyUsers, canManageStoreUsers, canWriteMetricsForStore } from '@/lib/rules'
 import { getAssignedStoreIdsForUser } from '@/lib/services/portal'
 import { isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
 import { issueInvite } from '@/lib/invites'
 
 function text(formData: FormData, key: string): string {
   return String(formData.get(key) || '').trim()
+}
+
+function metricNumber(formData: FormData, key: string): number {
+  const value = Number(text(formData, key))
+  if (!Number.isFinite(value)) {
+    throw new Error(`${key} must be a valid number.`)
+  }
+  return value
 }
 
 async function getAgencyById(payload: any, agencyId: number) {
@@ -253,6 +261,86 @@ export async function createAssignment(formData: FormData) {
 
   revalidatePath(`/dashboard/stores/${store.id}`)
   redirect(`/dashboard/stores/${store.id}`)
+}
+
+export async function createStoreMetric(formData: FormData) {
+  const actor = await requireUser()
+  const payload = await getPayloadClient() as any
+
+  const storeId = getId(text(formData, 'storeId'))
+  if (typeof storeId !== 'number') {
+    throw new Error('Store is required.')
+  }
+  const store = await getStoreById(payload, storeId)
+  if (!store) {
+    throw new Error('Store was not found.')
+  }
+
+  const storeAgencyId = getId(store.agency)
+  if (typeof storeAgencyId !== 'number') {
+    throw new Error('Store agency is invalid.')
+  }
+
+  const requestedTenantId = getId(text(formData, 'tenantId'))
+  if (requestedTenantId && requestedTenantId !== storeAgencyId) {
+    throw new Error('Metric tenant must match the store agency.')
+  }
+
+  const assignedStoreIds = await getAssignedStoreIdsForUser(actor)
+  if (!canWriteMetricsForStore({ user: actor, store, assignedStoreIds })) {
+    throw new Error('You do not have permission to write metrics for this store.')
+  }
+
+  const metricDate = text(formData, 'metricDate')
+  const metricData = {
+    tenant: storeAgencyId,
+    store: store.id,
+    source: 'shopify',
+    metricDate,
+    netSales: metricNumber(formData, 'netSales'),
+    grossProfit: metricNumber(formData, 'grossProfit'),
+    marketingAdSpend: metricNumber(formData, 'marketingAdSpend'),
+    mer: metricNumber(formData, 'mer'),
+  }
+
+  const existing = await payload.find({
+    collection: 'store-daily-metrics',
+    overrideAccess: true,
+    depth: 0,
+    limit: 1,
+    where: {
+      and: [
+        { tenant: { equals: storeAgencyId } },
+        { store: { equals: store.id } },
+        { metricDate: { equals: metricDate } },
+      ],
+    },
+  })
+
+  const existingDoc = existing.docs[0]
+  if (existingDoc?.id) {
+    await payload.update({
+      collection: 'store-daily-metrics',
+      id: existingDoc.id,
+      overrideAccess: true,
+      user: actor as any,
+      data: metricData,
+    })
+  } else {
+    await payload.create({
+      collection: 'store-daily-metrics',
+      overrideAccess: true,
+      user: actor as any,
+      data: metricData,
+    })
+  }
+
+  const returnPathRaw = text(formData, 'returnPath')
+  const returnPath = returnPathRaw.startsWith('/dashboard/') ? returnPathRaw : `/dashboard/stores/${store.id}`
+  revalidatePath(returnPath)
+  revalidatePath(`/dashboard/stores/${store.id}`)
+  revalidatePath(`/dashboard/agencies/${storeAgencyId}`)
+  redirect(returnPath)
 }
 
 export async function activateInvite(formData: FormData) {

@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation'
 import { Box, Button, Card, CardContent, Checkbox, FormControlLabel, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
-import { getAgencyPageData } from '@/lib/services/portal'
-import { createAgencyUser, createStore } from '@/lib/actions/portal'
-import { canManageAgencyUsers, canManageStore } from '@/lib/rules'
+import { getAgencyPageData, getAssignedStoreIdsForUser } from '@/lib/services/portal'
+import { createAgencyUser, createStore, createStoreMetric } from '@/lib/actions/portal'
+import { canManageAgencyUsers, canManageStore, canWriteMetricsForStore } from '@/lib/rules'
 import { LinkButton } from '@/components/mui/LinkButton'
 import { AnalyticsPanel } from '@/components/dashboard/AnalyticsPanel'
 
@@ -18,9 +18,13 @@ export default async function AgencyDetailPage({
   const { agencyId } = await params
   const data = await getAgencyPageData(user, agencyId)
   if (!data) notFound()
+  const assignedStoreIds = await getAssignedStoreIdsForUser(user)
 
   const canCreateAgencyUsers = canManageAgencyUsers(user)
   const canCreateStores = canManageStore(user)
+  const writableStores = data.stores.filter((store: any) =>
+    canWriteMetricsForStore({ user, store, assignedStoreIds }),
+  )
 
   return (
     <Stack spacing={3}>
@@ -101,6 +105,33 @@ export default async function AgencyDetailPage({
               </Grid>
               <FormControlLabel control={<Checkbox name="hasGlobalStoreAccess" />} label="Grant agency-wide store visibility" />
               <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Invite agency user</Button></Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {writableStores.length > 0 ? (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Add metric entry</Typography>
+            <Stack component="form" action={createStoreMetric} spacing={2}>
+              <input type="hidden" name="tenantId" value={agencyId} />
+              <input type="hidden" name="returnPath" value={`/dashboard/agencies/${agencyId}`} />
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 3 }}>
+                  <TextField name="storeId" label="Store" select defaultValue={String(writableStores[0].id)} required>
+                    {writableStores.map((store: any) => (
+                      <MenuItem key={store.id} value={store.id}>{store.name}</MenuItem>
+                    ))}
+                  </TextField>
+                </Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="metricDate" label="Date" type="date" required InputLabelProps={{ shrink: true }} /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="netSales" label="Net sales" type="number" required /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="grossProfit" label="Gross profit" type="number" required /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="marketingAdSpend" label="Marketing ad spend" type="number" required /></Grid>
+                <Grid size={{ xs: 12, md: 3 }}><TextField name="mer" label="MER" type="number" required /></Grid>
+              </Grid>
+              <Stack direction="row" justifyContent="flex-end"><Button type="submit" variant="contained">Save metric entry</Button></Stack>
             </Stack>
           </CardContent>
         </Card>
