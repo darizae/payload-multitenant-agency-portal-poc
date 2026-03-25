@@ -158,24 +158,6 @@ export const Stores: CollectionConfig = {
       type: 'text',
     },
     {
-      name: 'internalOpsNote',
-      type: 'text',
-      access: {
-        create: ({ req }) => {
-          const user = req.user as any
-          return isStoreheroRole(user) || isAgencyRoot(user)
-        },
-        read: ({ req }) => {
-          const user = req.user as any
-          return isStoreheroRole(user) || isAgencyRoot(user)
-        },
-        update: ({ req }) => {
-          const user = req.user as any
-          return isStoreheroRole(user) || isAgencyRoot(user)
-        },
-      },
-    },
-    {
       name: 'settings',
       type: 'json',
       defaultValue: {
