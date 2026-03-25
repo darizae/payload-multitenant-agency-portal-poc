@@ -1,6 +1,6 @@
 import { APIError } from 'payload'
 import { assertLastAgencyRootProtection, assertLastStoreRootProtection, assertNoAgencyTransfer, validateUserShape } from '@/lib/rules'
-import { isAgencyMember, isAgencyRoot, isStoreRoot, isStoreheroMember, isStoreheroRoot, isStoreheroRole } from '@/lib/permissions'
+import { hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreMember, isStoreRoot, isStoreheroMember, isStoreheroRoot, isStoreheroRole } from '@/lib/permissions'
 import type { AppUserLike } from '@/lib/types'
 import { getId } from '@/lib/utils'
 
@@ -300,4 +300,91 @@ export function validateAssignmentWritePermissions(args: {
   }
 
   throw new APIError('You do not have permission to manage assignments in this agency.', 403)
+}
+
+export async function validateMetricWritePermissions(args: {
+  payload: any
+  actor?: AppUserLike | null
+  originalDoc?: any
+  nextData?: Record<string, any>
+}) {
+  const { payload, actor, originalDoc, nextData } = args
+  if (!actor) return
+  if (isStoreheroRole(actor)) return
+
+  const tenantId = getId(nextData?.tenant ?? originalDoc?.tenant)
+  const storeId = getId(nextData?.store ?? originalDoc?.store)
+  if (!tenantId || !storeId) {
+    throw new APIError('Metrics must include tenant and store.', 400)
+  }
+
+  const store = await payload.findByID({
+    collection: 'stores',
+    id: storeId,
+    depth: 0,
+    overrideAccess: true,
+  })
+  if (!store) {
+    throw new APIError('Store was not found.', 404)
+  }
+
+  const storeAgencyId = getId(store.agency)
+  if (!storeAgencyId || String(storeAgencyId) !== String(tenantId)) {
+    throw new APIError('Metric tenant must match the store agency.', 400)
+  }
+
+  const actorAgencyId = getId(actor.agency)
+  const actorStoreId = getId(actor.store)
+
+  if (isAgencyRoot(actor)) {
+    if (!actorAgencyId || String(actorAgencyId) !== String(tenantId)) {
+      throw new APIError('Agency root users can only write metrics in their own agency.', 403)
+    }
+    return
+  }
+
+  if (isAgencyMember(actor)) {
+    if (!actorAgencyId || String(actorAgencyId) !== String(tenantId)) {
+      throw new APIError('Agency members can only write metrics in their own agency.', 403)
+    }
+
+    if (hasAutomaticAgencyWideStoreAccess(actor)) {
+      return
+    }
+
+    const actorId = getId(actor.id)
+    if (!actorId) {
+      throw new APIError('Agency members require an active user identity to write metrics.', 403)
+    }
+
+    const assignmentCount = await payload.count({
+      collection: 'agency-store-assignments',
+      overrideAccess: true,
+      where: {
+        and: [
+          { agency: { equals: tenantId } },
+          { store: { equals: storeId } },
+          { agencyUser: { equals: actorId } },
+          { status: { equals: 'active' } },
+        ],
+      },
+    })
+
+    if (assignmentCount.totalDocs < 1) {
+      throw new APIError('Agency members can only write metrics for assigned stores.', 403)
+    }
+    return
+  }
+
+  if (isStoreRoot(actor) || isStoreMember(actor)) {
+    if (!actorStoreId || String(actorStoreId) !== String(storeId)) {
+      throw new APIError('Store users can only write metrics in their own store.', 403)
+    }
+    if (actorAgencyId && String(actorAgencyId) !== String(tenantId)) {
+      throw new APIError('Store users can only write metrics in their own agency.', 403)
+    }
+    return
+  }
+
+  throw new APIError('You do not have permission to write metrics.', 403)
 }

@@ -93,6 +93,14 @@ export function canManageStoreUsers(params: {
   return isStoreRoot(user) && sameId(user.store, store.id)
 }
 
+export function canWriteMetricsForStore(params: {
+  user?: AppUserLike | null
+  store?: StoreLike | null
+  assignedStoreIds?: Array<string | number>
+}): boolean {
+  return canUserSeeStore(params)
+}
+
 export function canAccessAgencyWorkspace(user?: AppUserLike | null): boolean {
   return isStoreheroRole(user) || isAgencyRoot(user) || isAgencyMember(user)
 }

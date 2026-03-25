@@ -1,9 +1,10 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
 import { canAccessAdminPanel, metricsReadAccess } from '@/lib/access'
-import { isStoreheroRole } from '@/lib/permissions'
+import { isAgencyMember, isAgencyRoot, isStoreMember, isStoreRoot, isStoreheroRole } from '@/lib/permissions'
 import { getId } from '@/lib/utils'
 import { writeAuditLog } from '@/lib/audit'
+import { validateMetricWritePermissions } from '@/lib/guards'
 
 export const StoreDailyMetrics: CollectionConfig = {
   slug: 'store-daily-metrics',
@@ -14,13 +15,23 @@ export const StoreDailyMetrics: CollectionConfig = {
   access: {
     admin: canAccessAdminPanel,
     read: metricsReadAccess,
-    create: ({ req }) => isStoreheroRole(req.user as any),
-    update: ({ req }) => isStoreheroRole(req.user as any),
-    delete: ({ req }) => isStoreheroRole(req.user as any),
+    create: ({ req }) => {
+      const user = req.user as any
+      return isStoreheroRole(user) || isAgencyRoot(user) || isAgencyMember(user) || isStoreRoot(user) || isStoreMember(user)
+    },
+    update: metricsReadAccess,
+    delete: metricsReadAccess,
   },
   hooks: {
     beforeChange: [
       async ({ req, data, originalDoc }) => {
+        await validateMetricWritePermissions({
+          payload: req.payload,
+          actor: req.user as any,
+          originalDoc,
+          nextData: data || {},
+        })
+
         const tenantId = getId(data?.tenant ?? originalDoc?.tenant)
         const storeId = getId(data?.store ?? originalDoc?.store)
         const metricDate = String(data?.metricDate ?? originalDoc?.metricDate ?? '')

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   validateAssignmentWritePermissions,
+  validateMetricWritePermissions,
   validateStoreWritePermissions,
   validateUserWritePermissions,
 } from '@/lib/guards'
@@ -78,5 +79,30 @@ describe('guard permissions', () => {
         assignmentAgency: 'agency-2',
       }),
     ).toThrow()
+  })
+
+  it('allows store users to write metrics in their own store', async () => {
+    await expect(
+      validateMetricWritePermissions({
+        payload: {
+          findByID: async () => ({ id: 'store-1', agency: 'agency-1' }),
+        },
+        actor: { role: 'store-root', agency: 'agency-1', store: 'store-1' },
+        nextData: { tenant: 'agency-1', store: 'store-1' },
+      }),
+    ).resolves.toBeUndefined()
+  })
+
+  it('blocks agency members from writing metrics outside assignments', async () => {
+    await expect(
+      validateMetricWritePermissions({
+        payload: {
+          findByID: async () => ({ id: 'store-1', agency: 'agency-1' }),
+          count: async () => ({ totalDocs: 0 }),
+        },
+        actor: { id: 'user-1', role: 'agency-member', agency: 'agency-1', hasGlobalStoreAccess: false },
+        nextData: { tenant: 'agency-1', store: 'store-1' },
+      }),
+    ).rejects.toThrow()
   })
 })

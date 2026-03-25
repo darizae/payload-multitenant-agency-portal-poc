@@ -4,6 +4,7 @@ import {
   assertLastStoreRootProtection,
   assertNoAgencyTransfer,
   canManageStoreUsers,
+  canWriteMetricsForStore,
   canUserSeeStore,
   validateUserShape,
 } from '@/lib/rules'
@@ -84,6 +85,25 @@ describe('business rules', () => {
       canManageStoreUsers({
         user: { role: 'agency-root', agency: 'agency-1' },
         store: { id: 'store-9', agency: 'agency-1' },
+      }),
+    ).toBe(true)
+  })
+
+  it('restricts metric writes for agency members to assigned stores', () => {
+    expect(
+      canWriteMetricsForStore({
+        user: { role: 'agency-member', agency: 'agency-1' },
+        store: { id: 'store-1', agency: 'agency-1' },
+        assignedStoreIds: ['store-2'],
+      }),
+    ).toBe(false)
+  })
+
+  it('allows store members to write metrics in their own store', () => {
+    expect(
+      canWriteMetricsForStore({
+        user: { role: 'store-member', agency: 'agency-1', store: 'store-1' },
+        store: { id: 'store-1', agency: 'agency-1' },
       }),
     ).toBe(true)
   })
