@@ -1,8 +1,6 @@
 # API Showcase Runbook (Question-Driven)
 
-This runbook is organized to answer stakeholder questions directly, with concrete proof steps.
-
-## Condensed Stakeholder Questions
+## Questions
 
 1. Where are the API routes actually defined, and where can users see what to call?
 2. Can a user authenticate in Postman directly (without UI)?
@@ -14,10 +12,6 @@ This runbook is organized to answer stakeholder questions directly, with concret
 8. What folder structure should we use for portals and permissions, and does behavior still work?
 
 ## 0) Environment Setup (run first)
-
-Repository root:
-
-- `/Users/danie/repos/Keith/payload-multitenant-agency-portal-poc`
 
 Commands:
 
@@ -41,8 +35,6 @@ Seeded users used in proofs:
 If `openapi` endpoints return `404`, restart dev server:
 
 ```bash
-# in the terminal where next dev is running
-# press Ctrl+C, then run:
 npm run dev
 ```
 
@@ -84,39 +76,14 @@ Postman steps:
 }
 ```
 
-2. In Tests tab, save token:
-
-```javascript
-const json = pm.response.json();
-pm.environment.set('token', json.token);
-```
-
-3. Verify with:
+2. Verify with:
 - Method: `GET`
 - URL: `{{baseUrl}}/api/users/me`
 - Header: `Authorization: Bearer {{token}}`
 
-CLI equivalent proof:
-
-```bash
-set -euo pipefail
-BASE='http://localhost:3000'
-
-LOGIN_JSON=$(curl -sS -X POST "$BASE/api/users/login" \
-  -H 'Content-Type: application/json' \
-  --data '{"email":"storehero.root@poc.local","password":"Passw0rd!Demo"}')
-
-TOKEN=$(printf '%s' "$LOGIN_JSON" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);process.stdout.write(j.token||'')})")
-
-curl -sS "$BASE/api/users/me" -H "Authorization: Bearer $TOKEN" \
-| node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);console.log('email=' + (j.user?.email||''));console.log('role=' + (j.user?.role||''))})"
-```
-
 ## 3) Permissions enforcement proof (API-only)
 
-Answer:
-
-- Yes. The same API endpoints return different results by user role.
+API endpoints return different results by user role.
 
 Real use case:
 
@@ -125,12 +92,7 @@ Real use case:
 
 Postman setup:
 
-1. Create environment variables:
-- `baseUrl = http://localhost:3000`
-- `token_root =` (empty)
-- `token_member =` (empty)
-
-2. Login as agency root:
+1. Login as agency root:
 - Method: `POST`
 - URL: `{{baseUrl}}/api/users/login`
 - Body:
@@ -142,14 +104,7 @@ Postman setup:
 }
 ```
 
-- In Tests tab:
-
-```javascript
-const json = pm.response.json();
-pm.environment.set('token_root', json.token);
-```
-
-3. Login as agency member:
+2. Login as agency member:
 - Method: `POST`
 - URL: `{{baseUrl}}/api/users/login`
 - Body:
@@ -161,27 +116,14 @@ pm.environment.set('token_root', json.token);
 }
 ```
 
-- In Tests tab:
-
-```javascript
-const json = pm.response.json();
-pm.environment.set('token_member', json.token);
-```
-
-4. Compare visible stores:
-- Request A:
-  - Method: `GET`
-  - URL: `{{baseUrl}}/api/stores?limit=200`
-  - Header: `Authorization: Bearer {{token_root}}`
-- Request B:
-  - Same request, but `Authorization: Bearer {{token_member}}`
+3.Compare visible stores:
 
 Expected (tested):
 
 - Root sees `totalDocs = 5` including `Aurora Pets` (`id=4`) and `Aurora Apparel` (`id=5`).
 - Member sees `totalDocs = 3` (`Aurora Bikes`, `Aurora Coffee`, `Aurora Fitness`).
 
-5. Compare access to one unassigned store (`id=4`):
+4. Compare access to one unassigned store (`id=4`):
 - Request A:
   - Method: `GET`
   - URL: `{{baseUrl}}/api/stores/4`
@@ -191,7 +133,7 @@ Expected (tested):
   - Same request with `Authorization: Bearer {{token_member}}`
   - Expected: `404` with `{"errors":[{"message":"Not Found"}]}`
 
-6. Compare invite-management access:
+5. Compare invite-management access:
 - Request A:
   - Method: `GET`
   - URL: `{{baseUrl}}/api/invite-tokens?limit=200`
@@ -200,11 +142,6 @@ Expected (tested):
 - Request B:
   - Same request with `Authorization: Bearer {{token_member}}`
   - Expected: `403` with `{"errors":[{"message":"You are not allowed to perform this action."}]}`
-
-What this proves:
-
-- API permissions are enforced server-side, not UI-side.
-- Two users calling the same endpoints get different access and data visibility according to role/assignment.
 
 ## 4) Add a new TS field and show it in API
 
@@ -230,7 +167,6 @@ Step-by-step reproduction:
 1. Verify code change exists:
 
 - src/collections/Stores.ts
-- src/collections/Stores.ts
 
 2. Regenerate types and verify:
 
@@ -250,8 +186,7 @@ npm run dev
 4. Verify OpenAPI reflects the new field:
 
 ```bash
-curl -sS http://localhost:3000/api/openapi > /tmp/openapi.json
-rg -n "internalOpsNote" /tmp/openapi.json | head -n 5
+open http://localhost:3000/api/docs
 ```
 
 5. Postman success flow (storehero user):
@@ -267,13 +202,7 @@ rg -n "internalOpsNote" /tmp/openapi.json | head -n 5
 }
 ```
 
-2. Save token in Tests tab:
-
-```javascript
-pm.environment.set('token_storehero', pm.response.json().token);
-```
-
-3. Update store with new field:
+2Update store with new field:
 - `PATCH {{baseUrl}}/api/stores/1`
 - header: `Authorization: Bearer {{token_storehero}}`
 - body:
@@ -284,18 +213,10 @@ pm.environment.set('token_storehero', pm.response.json().token);
 }
 ```
 
-4. Read store back:
+3Read store back:
 - `GET {{baseUrl}}/api/stores/1`
 - header: `Authorization: Bearer {{token_storehero}}`
 - expected: response contains `"internalOpsNote": "OPS_DEMO_LOCKED"`
-
-6. Stash this agent change for presentation replay:
-
-```bash
-git stash push -m "demo-agent-internal-ops-note" src/collections/Stores.ts
-git stash list --max-count=3
-git stash apply stash^{/demo-agent-internal-ops-note}
-```
 
 ## 5) Hide that field for selected roles
 
@@ -316,12 +237,6 @@ Postman two-user proof:
 }
 ```
 
-In Tests tab:
-
-```javascript
-pm.environment.set('token_agency_root', pm.response.json().token);
-```
-
 2. Login as agency member:
 - `POST {{baseUrl}}/api/users/login`
 - body:
@@ -331,12 +246,6 @@ pm.environment.set('token_agency_root', pm.response.json().token);
   "email": "aurora.agency+member@poc.local",
   "password": "Passw0rd!Demo"
 }
-```
-
-In Tests tab:
-
-```javascript
-pm.environment.set('token_agency_member', pm.response.json().token);
 ```
 
 3. Root can read field:
@@ -379,26 +288,4 @@ src/features/portal/
   storehero/{actions.ts,services.ts}
   shared/{actions.ts,services.ts}
   actions/utils.ts
-```
-
-Behavior verification:
-
-```bash
-npm run check
-```
-
-## Final Demo Checklist
-
-```bash
-# API docs available
-curl -sS -o /tmp/openapi.out -w '%{http_code}\n' http://localhost:3000/api/openapi
-
-# Auth works
-curl -sS -o /tmp/login.out -w '%{http_code}\n' \
-  -X POST http://localhost:3000/api/users/login \
-  -H 'Content-Type: application/json' \
-  --data '{"email":"storehero.root@poc.local","password":"Passw0rd!Demo"}'
-
-# Quality gates
-npm run check
 ```
