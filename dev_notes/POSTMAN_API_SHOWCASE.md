@@ -210,7 +210,7 @@ What this proves:
 
 Answer:
 
-- Yes. This can be done by an agent and validated end-to-end in code, OpenAPI, and API responses.
+- Via agent and validated end-to-end in code, OpenAPI, and API responses.
 
 Agent prompt to use (copy/paste):
 
@@ -229,17 +229,16 @@ Step-by-step reproduction:
 
 1. Verify code change exists:
 
-```bash
-rg -n "internalOpsNote" src/collections/Stores.ts
-sed -n '150,210p' src/collections/Stores.ts
-```
+- src/collections/Stores.ts
+- src/collections/Stores.ts
 
 2. Regenerate types and verify:
 
 ```bash
 npm run generate:types
-rg -n "internalOpsNote" src/payload-types.ts
 ```
+
+See in: src/payload-types.ts
 
 3. Sync schema + data and restart app:
 
@@ -302,7 +301,7 @@ git stash apply stash^{/demo-agent-internal-ops-note}
 
 Answer:
 
-- Yes. It is hidden/restricted by field-level access, even when users hit the same endpoint.
+- Hidden/restricted by field-level access, even when users hit the same endpoint.
 
 Postman two-user proof:
 
