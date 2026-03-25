@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { buildConfig } from 'payload'
 import { postgresAdapter } from '@payloadcms/db-postgres'
 import sharp from 'sharp'
+import { openapi, scalar } from 'payload-oapi'
 import { Agencies } from '@/collections/Agencies'
 import { Users } from '@/collections/Users'
 import { Stores } from '@/collections/Stores'
@@ -21,6 +22,19 @@ export default buildConfig({
   serverURL,
   cors: [serverURL],
   csrf: [serverURL],
+  plugins: [
+    openapi({
+      openapiVersion: '3.1',
+      specEndpoint: '/openapi',
+      metadata: {
+        title: 'Agency Portal API',
+        version: '0.1.0',
+      },
+    }),
+    scalar({
+      specEndpoint: '/openapi',
+    }),
+  ],
   admin: {
     user: 'users',
     meta: {
