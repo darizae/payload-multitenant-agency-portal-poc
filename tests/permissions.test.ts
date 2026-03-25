@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canAccessPayloadAdmin, hasAutomaticAgencyWideStoreAccess } from '@/lib/permissions'
+import { canAccessPayloadAdmin, hasAutomaticAgencyWideStoreAccess } from '@/authz/roles'
 
 describe('permissions', () => {
   it('allows storehero and agency root roles into payload admin', () => {

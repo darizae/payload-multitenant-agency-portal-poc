@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getPayloadClient } from '@/lib/payload'
-import { canAccessPayloadAdmin } from '@/lib/permissions'
+import { canAccessPayloadAdmin } from '@/authz/roles'
 import type { AppUserLike } from '@/lib/types'
 
 export async function getCurrentUser(): Promise<AppUserLike | null> {

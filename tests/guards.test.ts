@@ -4,7 +4,7 @@ import {
   validateMetricWritePermissions,
   validateStoreWritePermissions,
   validateUserWritePermissions,
-} from '@/lib/guards'
+} from '@/authz/policies'
 
 describe('guard permissions', () => {
   it('blocks store root users from creating agency roles', () => {

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { requireUser } from '@/lib/auth'
-import { getAgencyBrandingForUser } from '@/lib/services/portal'
+import { getAgencyBrandingForUser } from '@/features/portal/shared/services'
 import { TenantThemeProvider } from '@/components/mui/TenantThemeProvider'
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {

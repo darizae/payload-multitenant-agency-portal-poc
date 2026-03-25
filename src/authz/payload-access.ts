@@ -1,5 +1,5 @@
 import type { Access, Where } from 'payload'
-import { canAccessPayloadAdmin, hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/lib/permissions'
+import { canAccessPayloadAdmin, hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/authz/roles'
 import type { AppUserLike } from '@/lib/types'
 import { getId } from '@/lib/utils'
 

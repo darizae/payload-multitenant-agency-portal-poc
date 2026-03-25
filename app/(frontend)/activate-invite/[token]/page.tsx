@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { Alert, Box, Button, Card, CardContent, Container, Stack, TextField, Typography } from '@mui/material'
-import { activateInvite } from '@/lib/actions/portal'
+import { activateInvite } from '@/features/portal/shared/actions'
 import { getPayloadClient } from '@/lib/payload'
 
 export default async function ActivateInvitePage({ params }: { params: Promise<{ token: string }> }) {

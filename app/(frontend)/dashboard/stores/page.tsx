@@ -1,6 +1,6 @@
 import { Card, CardContent, Stack, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
-import { getVisibleStores } from '@/lib/services/portal'
+import { getVisibleStores } from '@/features/portal/storehero/services'
 import { LinkButton } from '@/components/mui/LinkButton'
 
 export default async function StoresPage() {

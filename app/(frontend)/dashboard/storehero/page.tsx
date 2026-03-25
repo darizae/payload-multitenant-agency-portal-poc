@@ -1,7 +1,7 @@
 import { Card, CardContent, Grid, Stack, Typography } from '@mui/material'
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth'
-import { getDashboardStats, getVisibleAgencies, getVisibleStores } from '@/lib/services/portal'
+import { getDashboardStats, getVisibleAgencies, getVisibleStores } from '@/features/portal/storehero/services'
 import { LinkButton } from '@/components/mui/LinkButton'
 import { AnalyticsPanel } from '@/components/dashboard/AnalyticsPanel'
 

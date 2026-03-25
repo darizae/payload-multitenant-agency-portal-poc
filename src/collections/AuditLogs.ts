@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { auditLogReadAccess, canAccessAdminPanel } from '@/lib/access'
+import { auditLogReadAccess, canAccessAdminPanel } from '@/authz/payload-access'
 
 export const AuditLogs: CollectionConfig = {
   slug: 'audit-logs',

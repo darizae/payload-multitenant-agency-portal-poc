@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
-import { canAccessAdminPanel } from '@/lib/access'
-import { isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
+import { canAccessAdminPanel } from '@/authz/payload-access'
+import { isAgencyRoot, isStoreheroRole } from '@/authz/roles'
 import { getId } from '@/lib/utils'
 
 export const InviteTokens: CollectionConfig = {

@@ -1,4 +1,4 @@
-import { getRole, hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/lib/permissions'
+import { getRole, hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/authz/roles'
 import { getId, sameId } from '@/lib/utils'
 import type { AppUserLike, StoreLike } from '@/lib/types'
 

@@ -1,8 +1,8 @@
 import { Button, Card, CardContent, Grid, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
-import { getVisibleAgencies } from '@/lib/services/portal'
-import { createAgency } from '@/lib/actions/portal'
-import { isStoreheroRole } from '@/lib/permissions'
+import { getVisibleAgencies } from '@/features/portal/storehero/services'
+import { createAgency } from '@/features/portal/storehero/actions'
+import { isStoreheroRole } from '@/authz/roles'
 import { LinkButton } from '@/components/mui/LinkButton'
 
 export default async function AgenciesPage() {

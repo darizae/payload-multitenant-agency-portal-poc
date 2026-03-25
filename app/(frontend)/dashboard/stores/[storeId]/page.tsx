@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation'
 import { Box, Button, Card, CardContent, Grid, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { requireUser } from '@/lib/auth'
-import { getStorePageData } from '@/lib/services/portal'
-import { createAssignment, createStoreMetric, createStoreUser } from '@/lib/actions/portal'
-import { getAssignedStoreIdsForUser } from '@/lib/services/portal'
-import { canManageStoreUsers, canWriteMetricsForStore } from '@/lib/rules'
-import { isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
+import { getStorePageData } from '@/features/portal/store/services'
+import { createAssignment, createStoreMetric, createStoreUser } from '@/features/portal/store/actions'
+import { getAssignedStoreIdsForUser } from '@/features/portal/shared/services'
+import { canManageStoreUsers, canWriteMetricsForStore } from '@/authz/ui-rules'
+import { isAgencyRoot, isStoreheroRole } from '@/authz/roles'
 import { AnalyticsPanel } from '@/components/dashboard/AnalyticsPanel'
 
 export default async function StoreDetailPage({

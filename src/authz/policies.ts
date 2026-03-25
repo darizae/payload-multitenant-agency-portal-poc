@@ -1,6 +1,6 @@
 import { APIError } from 'payload'
-import { assertLastAgencyRootProtection, assertLastStoreRootProtection, assertNoAgencyTransfer, validateUserShape } from '@/lib/rules'
-import { hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreMember, isStoreRoot, isStoreheroMember, isStoreheroRoot, isStoreheroRole } from '@/lib/permissions'
+import { assertLastAgencyRootProtection, assertLastStoreRootProtection, assertNoAgencyTransfer, validateUserShape } from '@/authz/ui-rules'
+import { hasAutomaticAgencyWideStoreAccess, isAgencyMember, isAgencyRoot, isStoreMember, isStoreRoot, isStoreheroMember, isStoreheroRoot, isStoreheroRole } from '@/authz/roles'
 import type { AppUserLike } from '@/lib/types'
 import { getId } from '@/lib/utils'
 

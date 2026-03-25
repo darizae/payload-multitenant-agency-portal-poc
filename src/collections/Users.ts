@@ -1,8 +1,8 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { canAccessAdminPanel, usersReadAccess } from '@/lib/access'
-import { validateUserBusinessRules, validateUserDeletePermissions, validateUserWritePermissions } from '@/lib/guards'
-import { isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/lib/permissions'
+import { canAccessAdminPanel, usersReadAccess } from '@/authz/payload-access'
+import { validateUserBusinessRules, validateUserDeletePermissions, validateUserWritePermissions } from '@/authz/policies'
+import { isAgencyRoot, isStoreRoot, isStoreheroRole } from '@/authz/roles'
 import { getId, randomToken } from '@/lib/utils'
 import { writeAuditLog } from '@/lib/audit'
 

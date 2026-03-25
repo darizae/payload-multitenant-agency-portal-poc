@@ -1,9 +1,9 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { storesReadAccess, canAccessAdminPanel } from '@/lib/access'
-import { isAgencyMember, isAgencyRoot, isStoreheroRole } from '@/lib/permissions'
+import { storesReadAccess, canAccessAdminPanel } from '@/authz/payload-access'
+import { isAgencyMember, isAgencyRoot, isStoreheroRole } from '@/authz/roles'
 import { getId } from '@/lib/utils'
-import { validateStoreBusinessRules, validateStoreDeletePermissions, validateStoreWritePermissions } from '@/lib/guards'
+import { validateStoreBusinessRules, validateStoreDeletePermissions, validateStoreWritePermissions } from '@/authz/policies'
 import { writeAuditLog } from '@/lib/audit'
 
 export const Stores: CollectionConfig = {
@@ -156,6 +156,24 @@ export const Stores: CollectionConfig = {
     {
       name: 'contactPhone',
       type: 'text',
+    },
+    {
+      name: 'internalOpsNote',
+      type: 'text',
+      access: {
+        create: ({ req }) => {
+          const user = req.user as any
+          return isStoreheroRole(user) || isAgencyRoot(user)
+        },
+        read: ({ req }) => {
+          const user = req.user as any
+          return isStoreheroRole(user) || isAgencyRoot(user)
+        },
+        update: ({ req }) => {
+          const user = req.user as any
+          return isStoreheroRole(user) || isAgencyRoot(user)
+        },
+      },
     },
     {
       name: 'settings',

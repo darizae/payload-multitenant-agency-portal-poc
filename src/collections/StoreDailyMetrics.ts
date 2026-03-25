@@ -1,10 +1,10 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { canAccessAdminPanel, metricsReadAccess } from '@/lib/access'
-import { isAgencyMember, isAgencyRoot, isStoreMember, isStoreRoot, isStoreheroRole } from '@/lib/permissions'
+import { canAccessAdminPanel, metricsReadAccess } from '@/authz/payload-access'
+import { isAgencyMember, isAgencyRoot, isStoreMember, isStoreRoot, isStoreheroRole } from '@/authz/roles'
 import { getId } from '@/lib/utils'
 import { writeAuditLog } from '@/lib/audit'
-import { validateMetricWritePermissions } from '@/lib/guards'
+import { validateMetricWritePermissions } from '@/authz/policies'
 
 export const StoreDailyMetrics: CollectionConfig = {
   slug: 'store-daily-metrics',

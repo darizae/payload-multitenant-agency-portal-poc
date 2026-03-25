@@ -7,7 +7,7 @@ import {
   canWriteMetricsForStore,
   canUserSeeStore,
   validateUserShape,
-} from '@/lib/rules'
+} from '@/authz/ui-rules'
 
 describe('business rules', () => {
   it('blocks removing the last agency root user', () => {

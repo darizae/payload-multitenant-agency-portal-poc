@@ -1,7 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { APIError } from 'payload'
-import { agenciesReadAccess, canAccessAdminPanel } from '@/lib/access'
-import { isAgencyRoot, isStoreheroRoot } from '@/lib/permissions'
+import { agenciesReadAccess, canAccessAdminPanel } from '@/authz/payload-access'
+import { isAgencyRoot, isStoreheroRoot } from '@/authz/roles'
 import { getId } from '@/lib/utils'
 import { writeAuditLog } from '@/lib/audit'
 
